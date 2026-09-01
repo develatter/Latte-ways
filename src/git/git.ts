@@ -49,6 +49,10 @@ export class GitRepository {
     return this.run(["rev-parse", "HEAD"]);
   }
 
+  async parent(commit = "HEAD"): Promise<string> {
+    return this.run(["rev-parse", `${commit}^`]);
+  }
+
   async status(): Promise<string[]> {
     const output = await this.run(["status", "--porcelain=v1"]);
     return output ? output.split("\n") : [];

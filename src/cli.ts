@@ -5,8 +5,10 @@ import { bootstrap } from "./bootstrap/bootstrap.js";
 import { runChecks } from "./check/check.js";
 import { HARNESS_NAME, HARNESS_VERSION } from "./index.js";
 import { queryKnowledge } from "./query/query.js";
+import { loadState } from "./state/store.js";
 import { abandonPlan, finishPlan, proposePlan, startPlan } from "./work/plan.js";
 import { cancelQuick, finishQuick, startQuick } from "./work/quick.js";
+import { advanceSdd, downgradeSdd, startSdd } from "./work/sdd.js";
 
 export async function run(argv: readonly string[], cwd = process.cwd()): Promise<number> {
   const [command, ...args] = argv;
@@ -19,6 +21,31 @@ export async function run(argv: readonly string[], cwd = process.cwd()): Promise
   if (command === "--help" || command === "-h" || command === undefined) {
     console.log(`${HARNESS_NAME} ${HARNESS_VERSION}\n\nUsage: ways <command>`);
     return 0;
+  }
+
+  if (command === "status") {
+    const state = await loadState(cwd);
+    console.log(state ? JSON.stringify(state, null, 2) : "No active mutating work.");
+    return 0;
+  }
+
+  if (command === "sdd") {
+    const [action, id] = args;
+    if (action === "start" && id) {
+      const profile = args.includes("--supervised") ? "supervised" : "autonomous";
+      const state = await startSdd(cwd, id, profile);
+      console.log(`SDD started at ${state.phase} (${profile}).`);
+      return 0;
+    }
+    if (action === "advance") {
+      console.log(`SDD gate committed: ${await advanceSdd(cwd, args.includes("--approved"))}`);
+      return 0;
+    }
+    if (action === "downgrade" && (id === "quick" || id === "plan")) {
+      console.log(`SDD downgraded: ${await downgradeSdd(cwd, id)}`);
+      return 0;
+    }
+    throw new Error("Usage: ways sdd start <id> [--supervised] | advance [--approved] | downgrade <quick|plan>");
   }
 
   if (command === "check") {
