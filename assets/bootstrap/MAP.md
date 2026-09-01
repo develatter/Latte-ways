@@ -1,10 +1,11 @@
 # Repository map
 
-- Harness configuration: `.ways/config.json`
-- Active work state: `.ways/state/current.json`
-- Proposed plans: `.ways/plans/`
-- Active SDD artifacts: `.ways/sdd/`
-- Current knowledge: `.ways/knowledge/index.md`
-- Derived indexes: `.ways/indexes/`
-- Agent archetypes: `.ways/agents/`
-- Canonical checks: `scripts/check.sh`
+- Product overview and commands: `README.md`
+- Next-agent context: `docs/HANDOFF.md` when present
+- Runtime implementation: `src/`
+- Bootstrap templates and schemas: `assets/`
+- Automated verification: `tests/`
+- Harness configuration and state: `.ways/config.json`, `.ways/state/`
+- Plans and active SDD artifacts: `.ways/plans/`, `.ways/sdd/`
+- Current OKF knowledge and indexes: `.ways/knowledge/`, `.ways/indexes/`
+- Canonical local and CI check: `scripts/check.sh`

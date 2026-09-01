@@ -1,8 +1,26 @@
 # latte-ways
 
-A minimal, agent-agnostic development harness. Git records history; an OKF v0.2 bundle records current knowledge; deterministic gates prevent SDD phase skipping.
+A minimal, agent-agnostic development harness with Git-backed workflows, deterministic SDD gates, and living OKF v0.2 memory.
 
-## Install
+> **Status:** MVP. The core workflow is implemented and tested, but human approvals and reviewer independence are not yet strongly authenticated. See [`docs/HANDOFF.md`](docs/HANDOFF.md) for the next milestone.
+
+## Why
+
+Long-running coding agents tend to lose state, skip process, perform unnecessary rituals, and preserve stale documentation as truth. Latte Ways separates those concerns:
+
+- **Git** is the immutable work log.
+- **OKF memory** describes the repository as it exists now.
+- **Explicit modes** let the engineer choose the required ceremony.
+- **Deterministic gates** prevent SDD phases from being skipped.
+- **Portable agent archetypes** keep the core independent of any provider.
+
+## Requirements
+
+- Linux or macOS
+- Node.js 20 or newer
+- Git
+
+## Installation
 
 ```bash
 npm install --save-dev latte-ways
@@ -10,30 +28,78 @@ npx ways bootstrap --test-command='["npm","test"]'
 scripts/check.sh
 ```
 
-Linux and macOS are supported. `CLAUDE.md` is a symlink to the canonical `AGENTS.md`.
+Bootstrap creates the repository contract, including `AGENTS.md`, `MAP.md`, `.ways/`, `scripts/check.sh`, and a `CLAUDE.md` symlink to `AGENTS.md`.
 
-## Modes
+## Work modes
 
-- `ways query <terms>`: read-only memory search; no state or commit.
-- `ways quick start <id>`: direct implementation closed by `quick finish`.
-- `ways plan start <id>`: disposable, versioned proposal.
-- `ways sdd start <id>`: strict gated workflow, autonomous by default.
+| Mode | Purpose | Persistent ceremony |
+| --- | --- | --- |
+| `query` | Read-only exploration and memory search | None |
+| `quick` | Small direct change | State during work, checks, one final commit |
+| `plan` | Versioned proposal that can execute, promote, or be abandoned | Proposed plan until resolved |
+| `sdd` | Strict phased delivery, inline or multiagent | State, gates, tasks, review, validation |
 
-Run `ways status` before mutation. All completion commands require clean, atomic outcomes and record canonical Git trailers.
+```bash
+npx ways query "token rotation"
+npx ways quick start button-spacing
+npx ways plan start auth-refresh
+npx ways sdd start auth-refresh --supervised
+npx ways status
+```
 
-## SDD
+## SDD lifecycle
 
 ```text
 intake → explore → assess → specify → plan → decompose
 → implement → review → validate → reconcile-memory → close
 ```
 
-Parallel implementers use task worktrees. The core creates packets and integrates traced commits but never launches an agent. Review is always delegated, independent, and read-only.
+Each transition validates the previous certification in Git, updates JSON state, and creates an atomic commit with machine-readable trailers. `assess` can explicitly downgrade small work to `quick` or `plan`.
 
-## Integrity
-
-`scripts/check.sh` validates managed files, state, Git contracts, agent prompt length, OKF, deterministic indexes, and the configured unit-test command. Divergence fails closed and requires `ways repair`.
+Parallel tasks run in isolated worktrees. The core creates task packets and integrates traced commits, but deliberately does not launch agents. Review is delegated, read-only, severity-gated, and required even when implementation is inline.
 
 ## Knowledge
 
-Memory lives in `.ways/knowledge/`. Agent discoveries start as sourced `draft` concepts. Stable concepts require machine or human verification. `.ways/indexes/` is derived and rebuilt with `ways memory index`.
+The current repository memory is an OKF v0.2 bundle under `.ways/knowledge/`. Supported core types are `system`, `component`, `convention`, `decision`, and `faq`; custom OKF types remain valid.
+
+Agent-authored knowledge starts as a sourced `draft`. Stable concepts require deterministic or human verification. Search, graph, and catalog indexes under `.ways/indexes/` are derived and reproducible:
+
+```bash
+npx ways memory check
+npx ways memory index
+npx ways query "authentication convention"
+```
+
+## Integrity and recovery
+
+```bash
+scripts/check.sh
+npx ways repair diagnose
+npx ways upgrade
+```
+
+The canonical check validates managed files, schemas, state/Git consistency, compact agent prompts, OKF, derived indexes, and the configured unit-test command. Divergence fails closed; repair and destructive rollback always require explicit commands.
+
+Upgrades compare managed-file hashes and never overwrite modified files without checklist approval.
+
+## Development
+
+```bash
+npm ci
+npm run typecheck
+npm test
+npm run build
+scripts/check.sh
+```
+
+The implementation lives in `src/`, bootstrap resources in `assets/`, and integration tests in `tests/`. Do not edit generated `dist/` files.
+
+## Current test baseline
+
+- Contract, Git, bootstrap, integrity, mode, SDD, repair, upgrade, OKF, indexing, review, and worktree integration coverage
+- End-to-end SDD lifecycle test
+- GitHub Actions using the same `scripts/check.sh` entrypoint
+
+## License
+
+MIT

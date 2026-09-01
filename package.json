@@ -1,7 +1,7 @@
 {
   "name": "latte-ways",
   "version": "0.1.0",
-  "description": "Minimal, agent-agnostic software development harness",
+  "description": "A minimal, agent-agnostic development harness with Git-backed workflows and living OKF memory",
   "type": "module",
   "bin": {
     "ways": "./dist/cli.js"
