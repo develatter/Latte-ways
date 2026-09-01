@@ -7,6 +7,7 @@ import { HARNESS_NAME, HARNESS_VERSION } from "./index.js";
 import { writeIndexes } from "./knowledge/indexes.js";
 import { inspectOkf } from "./knowledge/okf.js";
 import { queryKnowledge } from "./query/query.js";
+import { adoptHead, diagnose, restoreStateFromHead, rollbackToLastGate } from "./repair/repair.js";
 import { loadState } from "./state/store.js";
 import { abandonPlan, finishPlan, proposePlan, startPlan } from "./work/plan.js";
 import { cancelQuick, finishQuick, startQuick } from "./work/quick.js";
@@ -25,6 +26,30 @@ export async function run(argv: readonly string[], cwd = process.cwd()): Promise
   if (command === "--help" || command === "-h" || command === undefined) {
     console.log(`${HARNESS_NAME} ${HARNESS_VERSION}\n\nUsage: ways <command>`);
     return 0;
+  }
+
+  if (command === "repair") {
+    const [strategy] = args;
+    if (!strategy || strategy === "diagnose") {
+      const result = await diagnose(cwd);
+      console.log(result.message);
+      return result.consistent ? 0 : 1;
+    }
+    if (strategy === "adopt-head") {
+      await adoptHead(cwd);
+      console.log("State adopted from certified HEAD history.");
+      return 0;
+    }
+    if (strategy === "restore-state") {
+      await restoreStateFromHead(cwd);
+      console.log("State restored from HEAD.");
+      return 0;
+    }
+    if (strategy === "last-gate") {
+      console.log(`Rolled back to ${await rollbackToLastGate(cwd, args.includes("--discard"))}`);
+      return 0;
+    }
+    throw new Error("Usage: ways repair [diagnose|adopt-head|restore-state|last-gate --discard]");
   }
 
   if (command === "status") {

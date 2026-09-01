@@ -1,0 +1,33 @@
+import { mkdtemp, readFile, writeFile } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+import { expect, it } from "vitest";
+import { bootstrap } from "../src/bootstrap/bootstrap.js";
+import { GitRepository } from "../src/git/git.js";
+import { adoptHead, diagnose } from "../src/repair/repair.js";
+import { loadState, saveState } from "../src/state/store.js";
+import { advanceSdd, startSdd } from "../src/work/sdd.js";
+
+it("repairs an explicit SDD state divergence from certified Git history", async () => {
+  const cwd = await mkdtemp(join(tmpdir(), "ways-repair-"));
+  const git = new GitRepository(cwd);
+  await git.run(["init", "-q"]);
+  await git.run(["config", "user.name", "Ways Test"]);
+  await git.run(["config", "user.email", "ways@example.test"]);
+  await writeFile(join(cwd, ".gitkeep"), "");
+  await git.run(["add", ".gitkeep"]);
+  await git.run(["commit", "-q", "-m", "initial"]);
+  await bootstrap({ cwd, testCommand: [process.execPath, "-e", "process.exit(0)"] });
+  await git.run(["add", "."]);
+  await git.run(["commit", "-q", "-m", "bootstrap"]);
+  await startSdd(cwd, "repair-work", "autonomous");
+  const packet = join(cwd, ".ways/sdd/repair-work/intake.md");
+  await writeFile(packet, (await readFile(packet, "utf8")).replace("Goal:", "Goal: repair").replace("Evidence:", "Evidence: test"));
+  await advanceSdd(cwd);
+  const state = (await loadState(cwd))!;
+  state.gateCommit = "0000000";
+  await saveState(cwd, state);
+  expect((await diagnose(cwd)).consistent).toBe(false);
+  await adoptHead(cwd);
+  expect((await diagnose(cwd)).consistent).toBe(true);
+});

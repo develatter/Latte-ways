@@ -89,10 +89,15 @@ export class GitRepository {
     }
   }
 
+  async recentCommits(limit = 100): Promise<CommitInfo[]> {
+    const hashes = (await this.run(["log", `-${limit}`, "--format=%H"])).split("\n").filter(Boolean);
+    const commits: CommitInfo[] = [];
+    for (const hash of hashes) commits.push(await this.commitInfo(hash));
+    return commits;
+  }
+
   async findCertification(work: string, phase: string): Promise<CommitInfo | undefined> {
-    const hashes = (await this.run(["log", "-100", "--format=%H"])).split("\n").filter(Boolean);
-    for (const hash of hashes) {
-      const info = await this.commitInfo(hash);
+    for (const info of await this.recentCommits()) {
       if (info.trailers.work === work && info.trailers.phase === phase && info.trailers.state === "completed") return info;
     }
     return undefined;
