@@ -1,0 +1,8 @@
+{
+  "schemaVersion": 1,
+  "harnessVersion": "0.1.0",
+  "testCommand": [
+    "npm",
+    "test"
+  ]
+}

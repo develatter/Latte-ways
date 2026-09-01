@@ -10,13 +10,13 @@ afterEach(() => {
 });
 
 describe("CLI", () => {
-  it("prints its version", () => {
-    expect(run(["--version"])).toBe(0);
+  it("prints its version", async () => {
+    expect(await run(["--version"])).toBe(0);
     expect(log).toHaveBeenCalledWith("0.1.0");
   });
 
-  it("rejects unknown commands", () => {
-    expect(run(["unknown"])).toBe(1);
+  it("rejects unknown commands", async () => {
+    expect(await run(["unknown"])).toBe(1);
     expect(error).toHaveBeenCalledWith("Unknown command: unknown");
   });
 });

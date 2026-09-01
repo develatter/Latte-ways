@@ -1,0 +1,14 @@
+{
+  "schemaVersion": 1,
+  "harnessVersion": "0.1.0",
+  "generatedAt": "2026-09-01T22:44:24.870Z",
+  "managedFiles": {
+    "AGENTS.md": "fa98f4c2d8e4abbcb1ec3b4dbad1a87e8ffc1fbaeb3d33d7ab764287c66e01f9",
+    "MAP.md": "f8ab7ffb92e6967cecfb842973c45371afaed8bab9bd951f3fc8cbba396a6454",
+    "scripts/check.sh": "951cc470833e05cc9d154f732e00c7d830a4e6e6bcae5373f2c7c81c7583be82",
+    ".ways/agents/explorer.md": "6cdc4529518b8b2a00b3d0bf90e925efc3626b35418bf4cc3c27dd73bc9158d3",
+    ".ways/agents/implementer.md": "ef5144b9ff151ad11779b9950405544444c2e71d832824b13d7a0f97a858953a",
+    ".ways/agents/reviewer.md": "36ec6f6f059bdda2e9a40131d21c19014d3ad7a279dbb6e5dc2de4125dbfa9e9",
+    ".ways/agents/orchestrator.md": "898cb25c9b162406e3b251b05fb063d2038b69352262eca2fc5b1e172e5bccf2"
+  }
+}
