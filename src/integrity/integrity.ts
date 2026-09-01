@@ -1,9 +1,10 @@
 import { lstat, readFile, readlink } from "node:fs/promises";
 import { join } from "node:path";
-import { CONFIG_PATH, KNOWLEDGE_DIR, MANIFEST_PATH, STATE_PATH } from "../domain/constants.js";
+import { CONFIG_PATH, INDEX_DIR, KNOWLEDGE_DIR, MANIFEST_PATH, STATE_PATH } from "../domain/constants.js";
 import type { ManagedManifest } from "../domain/types.js";
 import { validateConfig, validateManifest, validateState } from "../domain/validation.js";
 import { sha256 } from "../fs/files.js";
+import { indexesMatch } from "../knowledge/indexes.js";
 import { inspectOkf } from "../knowledge/okf.js";
 
 export interface IntegrityIssue {
@@ -79,6 +80,9 @@ export async function checkIntegrity(cwd: string): Promise<IntegrityIssue[]> {
   for (const issue of okf.issues) {
     const path = issue.path === KNOWLEDGE_DIR ? KNOWLEDGE_DIR : `${KNOWLEDGE_DIR}/${issue.path}`;
     issues.push({ code: issue.code, path, message: issue.message });
+  }
+  if (okf.issues.length === 0 && !await indexesMatch(cwd)) {
+    issues.push({ code: "stale-index", path: INDEX_DIR, message: "Knowledge indexes do not match the OKF bundle" });
   }
 
   for (const role of ["explorer", "implementer", "reviewer", "orchestrator"]) {

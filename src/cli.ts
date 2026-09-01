@@ -4,6 +4,8 @@ import { pathToFileURL } from "node:url";
 import { bootstrap } from "./bootstrap/bootstrap.js";
 import { runChecks } from "./check/check.js";
 import { HARNESS_NAME, HARNESS_VERSION } from "./index.js";
+import { writeIndexes } from "./knowledge/indexes.js";
+import { inspectOkf } from "./knowledge/okf.js";
 import { queryKnowledge } from "./query/query.js";
 import { loadState } from "./state/store.js";
 import { abandonPlan, finishPlan, proposePlan, startPlan } from "./work/plan.js";
@@ -132,6 +134,21 @@ export async function run(argv: readonly string[], cwd = process.cwd()): Promise
       return 0;
     }
     throw new Error("Usage: ways quick start <id> | finish --message=<subject> --memory=<updated|unchanged> | cancel");
+  }
+
+  if (command === "memory") {
+    const [action] = args;
+    if (action === "index") {
+      const indexes = await writeIndexes(cwd);
+      console.log(`Indexed ${indexes.catalog.documents.length} concepts.`);
+      return 0;
+    }
+    if (action === "check") {
+      const result = await inspectOkf(cwd);
+      for (const issue of result.issues) console.error(`${issue.code}: ${issue.path}: ${issue.message}`);
+      return result.issues.length === 0 ? 0 : 1;
+    }
+    throw new Error("Usage: ways memory check | index");
   }
 
   if (command === "query") {

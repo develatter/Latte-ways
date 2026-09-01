@@ -96,6 +96,7 @@ export async function bootstrap(options: BootstrapOptions): Promise<ManagedManif
   await writeAtomic(join(root, MANIFEST_PATH), stableJson(manifest));
   await writeAtomic(join(root, `${INDEX_DIR}/catalog.json`), stableJson({ schemaVersion: 1, documents: [] }));
   await writeAtomic(join(root, `${INDEX_DIR}/graph.json`), stableJson({ schemaVersion: 1, edges: [] }));
+  await writeAtomic(join(root, `${INDEX_DIR}/search.json`), stableJson({ schemaVersion: 1, terms: {} }));
 
   return manifest;
 }
