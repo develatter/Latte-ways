@@ -80,6 +80,9 @@ export async function advanceSdd(cwd: string, approved = false): Promise<string>
     throw new Error(`Phase ${state.phase} requires explicit human approval`);
   }
   await assertPhaseFilled(cwd, state);
+  if (state.phase === "implement" && state.tasks.some((task) => task.status !== "completed")) {
+    throw new Error("Every declared task must be integrated before implementation can complete");
+  }
   if (state.phase === "review") await assertReviewPassed(cwd, state.id);
   if (state.phase === "validate" || state.phase === "close") {
     const checks = await runChecks(cwd);
@@ -93,6 +96,23 @@ export async function advanceSdd(cwd: string, approved = false): Promise<string>
   const next = SDD_PHASES[index + 1];
 
   if (!next) {
+    for (const task of state.tasks) {
+      if (task.worktree) {
+        try {
+          await git.run(["worktree", "remove", "--force", task.worktree]);
+        } catch {
+          // A missing worktree is already clean.
+        }
+      }
+      if (task.branch) {
+        try {
+          await git.run(["branch", "-D", task.branch]);
+        } catch {
+          // A missing branch is already clean.
+        }
+      }
+    }
+    await rm(join(cwd, ".ways", "worktrees", state.id), { recursive: true, force: true });
     await rm(join(cwd, SDD_DIR, state.id), { recursive: true, force: true });
     await removeState(cwd);
   } else {
