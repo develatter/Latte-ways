@@ -9,7 +9,7 @@ import { inspectOkf } from "./knowledge/okf.js";
 import { queryKnowledge } from "./query/query.js";
 import { adoptHead, diagnose, restoreStateFromHead, rollbackToLastGate } from "./repair/repair.js";
 import { loadState } from "./state/store.js";
-import { abandonPlan, finishPlan, proposePlan, startPlan } from "./work/plan.js";
+import { abandonPlan, finishPlan, promotePlan, proposePlan, startPlan } from "./work/plan.js";
 import { cancelQuick, finishQuick, startQuick } from "./work/quick.js";
 import { submitReview } from "./work/review.js";
 import { advanceSdd, downgradeSdd, startSdd } from "./work/sdd.js";
@@ -140,6 +140,11 @@ export async function run(argv: readonly string[], cwd = process.cwd()): Promise
       console.log(`Plan committed: ${await proposePlan(cwd)}`);
       return 0;
     }
+    if (action === "promote") {
+      const state = await promotePlan(cwd, args.includes("--supervised") ? "supervised" : "autonomous");
+      console.log(`Plan promoted to SDD at ${state.phase}.`);
+      return 0;
+    }
     if (action === "finish") {
       const message = args.find((arg) => arg.startsWith("--message="))?.slice(10) ?? "";
       const memory = args.find((arg) => arg.startsWith("--memory="))?.slice(9);
@@ -150,7 +155,7 @@ export async function run(argv: readonly string[], cwd = process.cwd()): Promise
       console.log(`Plan abandoned: ${await abandonPlan(cwd)}`);
       return 0;
     }
-    throw new Error("Usage: ways plan start <id> | propose | finish --message=<subject> --memory=<updated|unchanged> | abandon");
+    throw new Error("Usage: ways plan start <id> | propose | promote [--supervised] | finish --message=<subject> --memory=<updated|unchanged> | abandon");
   }
 
   if (command === "quick") {

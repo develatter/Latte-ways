@@ -1,8 +1,8 @@
 import { mkdir, readFile, rm } from "node:fs/promises";
 import { join } from "node:path";
 import { HARNESS_VERSION } from "../index.js";
-import { PLAN_DIR } from "../domain/constants.js";
-import type { WorkState } from "../domain/types.js";
+import { PLAN_DIR, SDD_DIR } from "../domain/constants.js";
+import type { ApprovalProfile, WorkState } from "../domain/types.js";
 import { runChecks } from "../check/check.js";
 import { writeAtomic } from "../fs/files.js";
 import { GitRepository } from "../git/git.js";
@@ -63,6 +63,29 @@ export async function finishPlan(cwd: string, subject: string, memory: "updated"
   await removeState(cwd);
   const git = new GitRepository(cwd);
   return git.commit(await git.changedPaths(), subject, { work: state.id, state: "completed" });
+}
+
+export async function promotePlan(cwd: string, profile: ApprovalProfile): Promise<WorkState> {
+  const state = await loadState(cwd);
+  if (!state || state.mode !== "plan" || !state.planPath) throw new Error("No active plan");
+  const git = new GitRepository(cwd);
+  await git.assertClean();
+  const commit = await git.lastCommit();
+  if (commit.trailers.work !== state.id || commit.trailers.state !== "proposed") throw new Error("Plan must be proposed before SDD promotion");
+  const content = await readFile(join(cwd, state.planPath), "utf8");
+  const head = await git.head();
+  await rm(join(cwd, state.planPath), { force: true });
+  await writeAtomic(join(cwd, SDD_DIR, state.id, "source-plan.md"), content);
+  await writeAtomic(join(cwd, SDD_DIR, state.id, "intake.md"), "# intake\n\nGoal:\nEvidence:\nDecision:\nGate:\n");
+  state.mode = "sdd";
+  state.profile = profile;
+  state.phase = "intake";
+  state.baseCommit = head;
+  state.gateCommit = head;
+  state.updatedAt = new Date().toISOString();
+  delete state.planPath;
+  await saveState(cwd, state);
+  return state;
 }
 
 export async function abandonPlan(cwd: string): Promise<string> {

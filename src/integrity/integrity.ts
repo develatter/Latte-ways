@@ -1,11 +1,12 @@
 import { lstat, readFile, readlink } from "node:fs/promises";
 import { join } from "node:path";
 import { CONFIG_PATH, INDEX_DIR, KNOWLEDGE_DIR, MANIFEST_PATH, STATE_PATH } from "../domain/constants.js";
-import type { ManagedManifest } from "../domain/types.js";
+import type { ManagedManifest, WorkState } from "../domain/types.js";
 import { validateConfig, validateManifest, validateState } from "../domain/validation.js";
 import { sha256 } from "../fs/files.js";
 import { indexesMatch } from "../knowledge/indexes.js";
 import { inspectOkf } from "../knowledge/okf.js";
+import { GitRepository } from "../git/git.js";
 
 export interface IntegrityIssue {
   code: string;
@@ -66,13 +67,36 @@ export async function checkIntegrity(cwd: string): Promise<IntegrityIssue[]> {
     issues.push({ code: "missing-symlink", path: "CLAUDE.md", message: "CLAUDE.md symlink is missing" });
   }
 
+  let activeState: WorkState | undefined;
   if (await isFile(join(cwd, STATE_PATH))) {
     try {
-      if (!validateState(await readJson(join(cwd, STATE_PATH)))) {
-        issues.push({ code: "invalid-state", path: STATE_PATH, message: "Active state does not match its schema" });
-      }
+      const value = await readJson(join(cwd, STATE_PATH));
+      if (validateState(value)) activeState = value;
+      else issues.push({ code: "invalid-state", path: STATE_PATH, message: "Active state does not match its schema" });
     } catch {
       issues.push({ code: "invalid-state", path: STATE_PATH, message: "Active state is unreadable" });
+    }
+  }
+
+  if (activeState) {
+    try {
+      const git = new GitRepository(cwd);
+      const head = await git.head();
+      if (activeState.mode === "sdd" && activeState.lastCompletedPhase) {
+        const certification = await git.findCertification(activeState.id, activeState.lastCompletedPhase);
+        if (!certification || !await git.isAncestor(certification.hash, head) || await git.parent(certification.hash) !== activeState.gateCommit) {
+          issues.push({ code: "state-git-divergence", path: STATE_PATH, message: "SDD state does not match certified Git history" });
+        }
+      } else if (activeState.mode === "sdd" || activeState.mode === "quick") {
+        if (head !== activeState.baseCommit) issues.push({ code: "state-git-divergence", path: STATE_PATH, message: "Work HEAD changed outside a gate" });
+      } else if (activeState.mode === "plan" && head !== activeState.baseCommit) {
+        const commit = await git.lastCommit();
+        if (commit.trailers.work !== activeState.id || commit.trailers.state !== "proposed") {
+          issues.push({ code: "state-git-divergence", path: STATE_PATH, message: "Plan HEAD is not its proposal commit" });
+        }
+      }
+    } catch {
+      issues.push({ code: "state-git-divergence", path: STATE_PATH, message: "Unable to reconcile state with Git" });
     }
   }
 
