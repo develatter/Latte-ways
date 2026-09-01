@@ -21,6 +21,7 @@ const STATIC_FILES: Array<[string, string, number?]> = [
   [".ways/agents/implementer.md", "agents/implementer.md"],
   [".ways/agents/reviewer.md", "agents/reviewer.md"],
   [".ways/agents/orchestrator.md", "agents/orchestrator.md"],
+  [".ways/.gitignore", "ways.gitignore"],
 ];
 const KNOWLEDGE_TYPES = ["system", "components", "conventions", "decisions", "faq"];
 

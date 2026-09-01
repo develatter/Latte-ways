@@ -1,11 +1,13 @@
 import { mkdir, readFile, rm } from "node:fs/promises";
 import { join } from "node:path";
 import { HARNESS_VERSION } from "../index.js";
+import { runChecks } from "../check/check.js";
 import { PLAN_DIR, SDD_DIR } from "../domain/constants.js";
 import { SDD_PHASES, type ApprovalProfile, type SddPhase, type WorkState } from "../domain/types.js";
 import { writeAtomic } from "../fs/files.js";
 import { GitRepository } from "../git/git.js";
 import { loadState, removeState, saveState } from "../state/store.js";
+import { assertReviewPassed } from "./review.js";
 
 const HUMAN_GATES = new Set<SddPhase>(["intake", "plan", "close"]);
 
@@ -37,11 +39,11 @@ export async function assertSddConsistency(cwd: string, state: WorkState): Promi
     if (head !== state.baseCommit) throw new Error("SDD state diverged before its first gate; run ways repair");
     return;
   }
-  const commit = await git.lastCommit();
-  if (commit.trailers.work !== state.id || commit.trailers.phase !== state.lastCompletedPhase || commit.trailers.state !== "completed") {
-    throw new Error("HEAD does not certify the previous SDD phase; run ways repair");
+  const commit = await git.findCertification(state.id, state.lastCompletedPhase);
+  if (!commit || !await git.isAncestor(commit.hash, head)) {
+    throw new Error("HEAD does not contain certification for the previous SDD phase; run ways repair");
   }
-  if (await git.parent(head) !== state.gateCommit) throw new Error("State gate commit does not match HEAD parent; run ways repair");
+  if (await git.parent(commit.hash) !== state.gateCommit) throw new Error("State gate commit does not match certification parent; run ways repair");
 }
 
 export async function startSdd(cwd: string, id: string, profile: ApprovalProfile): Promise<WorkState> {
@@ -78,6 +80,11 @@ export async function advanceSdd(cwd: string, approved = false): Promise<string>
     throw new Error(`Phase ${state.phase} requires explicit human approval`);
   }
   await assertPhaseFilled(cwd, state);
+  if (state.phase === "review") await assertReviewPassed(cwd, state.id);
+  if (state.phase === "validate" || state.phase === "close") {
+    const checks = await runChecks(cwd);
+    if (checks.issues.length > 0 || checks.testExitCode !== 0) throw new Error(`Checks failed during ${state.phase}`);
+  }
 
   const git = new GitRepository(cwd);
   const previousHead = await git.head();

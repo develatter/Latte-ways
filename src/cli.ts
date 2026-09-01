@@ -8,7 +8,9 @@ import { queryKnowledge } from "./query/query.js";
 import { loadState } from "./state/store.js";
 import { abandonPlan, finishPlan, proposePlan, startPlan } from "./work/plan.js";
 import { cancelQuick, finishQuick, startQuick } from "./work/quick.js";
+import { submitReview } from "./work/review.js";
 import { advanceSdd, downgradeSdd, startSdd } from "./work/sdd.js";
+import { addTask, integrateTask, prepareTask } from "./work/tasks.js";
 
 export async function run(argv: readonly string[], cwd = process.cwd()): Promise<number> {
   const [command, ...args] = argv;
@@ -27,6 +29,36 @@ export async function run(argv: readonly string[], cwd = process.cwd()): Promise
     const state = await loadState(cwd);
     console.log(state ? JSON.stringify(state, null, 2) : "No active mutating work.");
     return 0;
+  }
+
+  if (command === "review") {
+    const [action, path] = args;
+    if (action === "submit" && path) {
+      const result = await submitReview(cwd, path);
+      console.log(`Review recorded: ${result.verdict}`);
+      return 0;
+    }
+    throw new Error("Usage: ways review submit <review.json>");
+  }
+
+  if (command === "task") {
+    const [action, id] = args;
+    if (action === "add" && id) {
+      const title = args.find((arg) => arg.startsWith("--title="))?.slice(8) ?? "";
+      const dependencies = args.find((arg) => arg.startsWith("--depends="))?.slice(10).split(",").filter(Boolean) ?? [];
+      console.log(JSON.stringify(await addTask(cwd, id, title, dependencies), null, 2));
+      return 0;
+    }
+    if (action === "prepare" && id) {
+      console.log(JSON.stringify(await prepareTask(cwd, id), null, 2));
+      return 0;
+    }
+    if (action === "integrate" && id) {
+      const commits = args.find((arg) => arg.startsWith("--commits="))?.slice(10).split(",").filter(Boolean) ?? [];
+      console.log(JSON.stringify(await integrateTask(cwd, id, commits), null, 2));
+      return 0;
+    }
+    throw new Error("Usage: ways task add <id> --title=<text> [--depends=a,b] | prepare <id> | integrate <id> --commits=a,b");
   }
 
   if (command === "sdd") {

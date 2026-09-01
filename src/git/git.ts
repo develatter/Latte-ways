@@ -70,10 +70,32 @@ export class GitRepository {
     }
   }
 
-  async lastCommit(): Promise<CommitInfo> {
-    const output = await this.run(["log", "-1", "--format=%H%x00%s%x00%b"]);
+  async commitInfo(ref = "HEAD"): Promise<CommitInfo> {
+    const output = await this.run(["show", "-s", "--format=%H%x00%s%x00%b", ref]);
     const [hash = "", subject = "", body = ""] = output.split("\0");
     return { hash, subject, body, trailers: parseTrailers(body) };
+  }
+
+  async lastCommit(): Promise<CommitInfo> {
+    return this.commitInfo("HEAD");
+  }
+
+  async isAncestor(ancestor: string, descendant = "HEAD"): Promise<boolean> {
+    try {
+      await this.run(["merge-base", "--is-ancestor", ancestor, descendant]);
+      return true;
+    } catch {
+      return false;
+    }
+  }
+
+  async findCertification(work: string, phase: string): Promise<CommitInfo | undefined> {
+    const hashes = (await this.run(["log", "-100", "--format=%H"])).split("\n").filter(Boolean);
+    for (const hash of hashes) {
+      const info = await this.commitInfo(hash);
+      if (info.trailers.work === work && info.trailers.phase === phase && info.trailers.state === "completed") return info;
+    }
+    return undefined;
   }
 
   async commit(paths: readonly string[], subject: string, trailers: CommitTrailers): Promise<string> {
