@@ -13,7 +13,7 @@ export interface BootstrapOptions {
   force?: boolean;
 }
 
-const STATIC_FILES: Array<[string, string, number?]> = [
+export const MANAGED_ASSETS: Array<[string, string, number?]> = [
   ["AGENTS.md", "AGENTS.md"],
   ["MAP.md", "MAP.md"],
   ["scripts/check.sh", "check.sh", 0o755],
@@ -25,7 +25,7 @@ const STATIC_FILES: Array<[string, string, number?]> = [
 ];
 const KNOWLEDGE_TYPES = ["system", "components", "conventions", "decisions", "faq"];
 
-function assetPath(relative: string): string {
+export function assetPath(relative: string): string {
   return fileURLToPath(new URL(`../../assets/bootstrap/${relative}`, import.meta.url));
 }
 
@@ -63,7 +63,7 @@ export async function bootstrap(options: BootstrapOptions): Promise<ManagedManif
   ]);
 
   const managedFiles: Record<string, string> = {};
-  for (const [target, asset, mode] of STATIC_FILES) {
+  for (const [target, asset, mode] of MANAGED_ASSETS) {
     managedFiles[target] = await installFile(root, target, asset, force, mode);
   }
 

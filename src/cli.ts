@@ -14,6 +14,7 @@ import { cancelQuick, finishQuick, startQuick } from "./work/quick.js";
 import { submitReview } from "./work/review.js";
 import { advanceSdd, downgradeSdd, startSdd } from "./work/sdd.js";
 import { addTask, integrateTask, prepareTask } from "./work/tasks.js";
+import { applyUpgrade, planUpgrade } from "./upgrade/upgrade.js";
 
 export async function run(argv: readonly string[], cwd = process.cwd()): Promise<number> {
   const [command, ...args] = argv;
@@ -25,6 +26,19 @@ export async function run(argv: readonly string[], cwd = process.cwd()): Promise
 
   if (command === "--help" || command === "-h" || command === undefined) {
     console.log(`${HARNESS_NAME} ${HARNESS_VERSION}\n\nUsage: ways <command>`);
+    return 0;
+  }
+
+  if (command === "upgrade") {
+    const plan = await planUpgrade(cwd);
+    if (!args.includes("--apply")) {
+      console.log(`Upgrade ${plan.from} -> ${plan.to}`);
+      for (const path of plan.modifiedManagedFiles) console.log(`- [ ] overwrite ${path}`);
+      return 0;
+    }
+    const approved = args.includes("--overwrite-all") ? new Set(["*"]) : new Set(args.filter((arg) => arg.startsWith("--overwrite=")).map((arg) => arg.slice(12)));
+    await applyUpgrade(cwd, approved);
+    console.log(`Harness upgraded to ${plan.to}.`);
     return 0;
   }
 
