@@ -1,0 +1,17 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://latte-ways.dev/schemas/manifest-v1.json",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schemaVersion", "harnessVersion", "generatedAt", "managedFiles"],
+  "properties": {
+    "schemaVersion": { "const": 1 },
+    "harnessVersion": { "type": "string", "minLength": 1 },
+    "generatedAt": { "type": "string", "format": "date-time" },
+    "managedFiles": {
+      "type": "object",
+      "minProperties": 1,
+      "additionalProperties": { "type": "string", "pattern": "^[a-f0-9]{64}$" }
+    }
+  }
+}

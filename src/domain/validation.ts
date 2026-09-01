@@ -2,9 +2,9 @@ import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import type { AnySchema, ErrorObject, ValidateFunction } from "ajv";
 import { Ajv2020 } from "ajv/dist/2020.js";
-import type { HarnessConfig, ReviewResult, WorkState } from "./types.js";
+import type { HarnessConfig, ManagedManifest, ReviewResult, WorkState } from "./types.js";
 
-type SchemaName = "config" | "state" | "task" | "review";
+type SchemaName = "config" | "manifest" | "state" | "task" | "review";
 
 export interface ValidationResult {
   valid: boolean;
@@ -22,6 +22,7 @@ function loadSchema(name: SchemaName): AnySchema {
 ajv.addSchema(loadSchema("task"));
 const validators: Record<Exclude<SchemaName, "task">, ValidateFunction> = {
   config: ajv.compile(loadSchema("config")),
+  manifest: ajv.compile(loadSchema("manifest")),
   state: ajv.compile(loadSchema("state")),
   review: ajv.compile(loadSchema("review")),
 };
@@ -38,6 +39,10 @@ function validate(name: keyof typeof validators, value: unknown): ValidationResu
 
 export function validateConfig(value: unknown): value is HarnessConfig {
   return validate("config", value).valid;
+}
+
+export function validateManifest(value: unknown): value is ManagedManifest {
+  return validate("manifest", value).valid;
 }
 
 export function validateState(value: unknown): value is WorkState {

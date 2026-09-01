@@ -1,0 +1,38 @@
+import { mkdtemp, writeFile } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+import { describe, expect, it } from "vitest";
+import { bootstrap } from "../src/bootstrap/bootstrap.js";
+import { GitRepository } from "../src/git/git.js";
+import { checkIntegrity } from "../src/integrity/integrity.js";
+
+async function installed(): Promise<string> {
+  const cwd = await mkdtemp(join(tmpdir(), "ways-integrity-"));
+  const git = new GitRepository(cwd);
+  await git.run(["init", "-q"]);
+  await git.run(["config", "user.name", "Ways Test"]);
+  await git.run(["config", "user.email", "ways@example.test"]);
+  await writeFile(join(cwd, ".gitkeep"), "");
+  await git.run(["add", ".gitkeep"]);
+  await git.run(["commit", "-q", "-m", "initial"]);
+  await bootstrap({ cwd, testCommand: ["npm", "test"] });
+  return cwd;
+}
+
+describe("integrity", () => {
+  it("accepts a fresh bootstrap", async () => {
+    expect(await checkIntegrity(await installed())).toEqual([]);
+  });
+
+  it("detects a modified managed file", async () => {
+    const cwd = await installed();
+    await writeFile(join(cwd, "AGENTS.md"), "changed\n");
+    expect((await checkIntegrity(cwd)).map((issue) => issue.code)).toContain("managed-file-modified");
+  });
+
+  it("enforces compact agent prompts", async () => {
+    const cwd = await installed();
+    await writeFile(join(cwd, ".ways/agents/reviewer.md"), "1\n2\n3\n4\n5\n6\n7\n");
+    expect((await checkIntegrity(cwd)).map((issue) => issue.code)).toContain("prompt-too-long");
+  });
+});
