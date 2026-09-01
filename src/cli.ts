@@ -5,6 +5,7 @@ import { bootstrap } from "./bootstrap/bootstrap.js";
 import { runChecks } from "./check/check.js";
 import { HARNESS_NAME, HARNESS_VERSION } from "./index.js";
 import { queryKnowledge } from "./query/query.js";
+import { abandonPlan, finishPlan, proposePlan, startPlan } from "./work/plan.js";
 import { cancelQuick, finishQuick, startQuick } from "./work/quick.js";
 
 export async function run(argv: readonly string[], cwd = process.cwd()): Promise<number> {
@@ -26,6 +27,30 @@ export async function run(argv: readonly string[], cwd = process.cwd()): Promise
     if (result.issues.length > 0 || (result.testExitCode !== undefined && result.testExitCode !== 0)) return 1;
     console.log("Checks passed.");
     return 0;
+  }
+
+  if (command === "plan") {
+    const [action, id] = args;
+    if (action === "start" && id) {
+      const state = await startPlan(cwd, id);
+      console.log(`Plan started: ${state.planPath}`);
+      return 0;
+    }
+    if (action === "propose") {
+      console.log(`Plan committed: ${await proposePlan(cwd)}`);
+      return 0;
+    }
+    if (action === "finish") {
+      const message = args.find((arg) => arg.startsWith("--message="))?.slice(10) ?? "";
+      const memory = args.find((arg) => arg.startsWith("--memory="))?.slice(9);
+      console.log(`Plan completed: ${await finishPlan(cwd, message, memory as "updated" | "unchanged")}`);
+      return 0;
+    }
+    if (action === "abandon") {
+      console.log(`Plan abandoned: ${await abandonPlan(cwd)}`);
+      return 0;
+    }
+    throw new Error("Usage: ways plan start <id> | propose | finish --message=<subject> --memory=<updated|unchanged> | abandon");
   }
 
   if (command === "quick") {
