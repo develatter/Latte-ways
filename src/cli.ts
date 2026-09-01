@@ -3,6 +3,7 @@
 import { pathToFileURL } from "node:url";
 import { bootstrap } from "./bootstrap/bootstrap.js";
 import { HARNESS_NAME, HARNESS_VERSION } from "./index.js";
+import { queryKnowledge } from "./query/query.js";
 
 export async function run(argv: readonly string[], cwd = process.cwd()): Promise<number> {
   const [command, ...args] = argv;
@@ -14,6 +15,14 @@ export async function run(argv: readonly string[], cwd = process.cwd()): Promise
 
   if (command === "--help" || command === "-h" || command === undefined) {
     console.log(`${HARNESS_NAME} ${HARNESS_VERSION}\n\nUsage: ways <command>`);
+    return 0;
+  }
+
+  if (command === "query") {
+    const query = args.join(" ").trim();
+    if (!query) throw new Error("Usage: ways query <terms>");
+    const hits = await queryKnowledge(cwd, query);
+    for (const hit of hits) console.log(`${hit.score}\t${hit.path}\t${hit.preview}`);
     return 0;
   }
 
