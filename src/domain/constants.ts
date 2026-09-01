@@ -1,0 +1,8 @@
+export const WAYS_DIR = ".ways";
+export const CONFIG_PATH = `${WAYS_DIR}/config.json`;
+export const MANIFEST_PATH = `${WAYS_DIR}/manifest.json`;
+export const STATE_PATH = `${WAYS_DIR}/state/current.json`;
+export const KNOWLEDGE_DIR = `${WAYS_DIR}/knowledge`;
+export const INDEX_DIR = `${WAYS_DIR}/indexes`;
+export const PLAN_DIR = `${WAYS_DIR}/plans`;
+export const SDD_DIR = `${WAYS_DIR}/sdd`;

@@ -1,0 +1,26 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://latte-ways.dev/schemas/state-v1.json",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schemaVersion", "harnessVersion", "id", "mode", "status", "baseCommit", "gateCommit", "createdAt", "updatedAt", "tasks"],
+  "properties": {
+    "schemaVersion": { "const": 1 },
+    "harnessVersion": { "type": "string", "minLength": 1 },
+    "id": { "type": "string", "pattern": "^[a-z0-9][a-z0-9-]{1,62}$" },
+    "mode": { "enum": ["quick", "plan", "sdd"] },
+    "status": { "enum": ["active", "blocked", "completed", "cancelled"] },
+    "baseCommit": { "type": "string", "minLength": 7 },
+    "gateCommit": { "type": "string", "minLength": 7 },
+    "createdAt": { "type": "string", "format": "date-time" },
+    "updatedAt": { "type": "string", "format": "date-time" },
+    "profile": { "enum": ["autonomous", "supervised"] },
+    "phase": { "enum": ["intake", "explore", "assess", "specify", "plan", "decompose", "implement", "review", "validate", "reconcile-memory", "close"] },
+    "lastCompletedPhase": { "$ref": "#/properties/phase" },
+    "planPath": { "type": "string", "minLength": 1 },
+    "tasks": {
+      "type": "array",
+      "items": { "$ref": "https://latte-ways.dev/schemas/task-v1.json" }
+    }
+  }
+}
