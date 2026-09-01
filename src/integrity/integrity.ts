@@ -1,9 +1,10 @@
 import { lstat, readFile, readlink } from "node:fs/promises";
 import { join } from "node:path";
-import { CONFIG_PATH, MANIFEST_PATH, STATE_PATH } from "../domain/constants.js";
+import { CONFIG_PATH, KNOWLEDGE_DIR, MANIFEST_PATH, STATE_PATH } from "../domain/constants.js";
 import type { ManagedManifest } from "../domain/types.js";
 import { validateConfig, validateManifest, validateState } from "../domain/validation.js";
 import { sha256 } from "../fs/files.js";
+import { inspectOkf } from "../knowledge/okf.js";
 
 export interface IntegrityIssue {
   code: string;
@@ -72,6 +73,12 @@ export async function checkIntegrity(cwd: string): Promise<IntegrityIssue[]> {
     } catch {
       issues.push({ code: "invalid-state", path: STATE_PATH, message: "Active state is unreadable" });
     }
+  }
+
+  const okf = await inspectOkf(cwd);
+  for (const issue of okf.issues) {
+    const path = issue.path === KNOWLEDGE_DIR ? KNOWLEDGE_DIR : `${KNOWLEDGE_DIR}/${issue.path}`;
+    issues.push({ code: issue.code, path, message: issue.message });
   }
 
   for (const role of ["explorer", "implementer", "reviewer", "orchestrator"]) {
