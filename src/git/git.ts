@@ -54,6 +54,11 @@ export class GitRepository {
     return output ? output.split("\n") : [];
   }
 
+  async changedPaths(): Promise<string[]> {
+    const output = await this.run(["ls-files", "--modified", "--deleted", "--others", "--exclude-standard"]);
+    return output ? [...new Set(output.split("\n").filter(Boolean))].sort() : [];
+  }
+
   async assertClean(): Promise<void> {
     const changes = await this.status();
     if (changes.length > 0) {

@@ -2,8 +2,10 @@
 
 import { pathToFileURL } from "node:url";
 import { bootstrap } from "./bootstrap/bootstrap.js";
+import { runChecks } from "./check/check.js";
 import { HARNESS_NAME, HARNESS_VERSION } from "./index.js";
 import { queryKnowledge } from "./query/query.js";
+import { cancelQuick, finishQuick, startQuick } from "./work/quick.js";
 
 export async function run(argv: readonly string[], cwd = process.cwd()): Promise<number> {
   const [command, ...args] = argv;
@@ -16,6 +18,36 @@ export async function run(argv: readonly string[], cwd = process.cwd()): Promise
   if (command === "--help" || command === "-h" || command === undefined) {
     console.log(`${HARNESS_NAME} ${HARNESS_VERSION}\n\nUsage: ways <command>`);
     return 0;
+  }
+
+  if (command === "check") {
+    const result = await runChecks(cwd, args.includes("--integrity-only"));
+    for (const issue of result.issues) console.error(`${issue.code}: ${issue.path}: ${issue.message}`);
+    if (result.issues.length > 0 || (result.testExitCode !== undefined && result.testExitCode !== 0)) return 1;
+    console.log("Checks passed.");
+    return 0;
+  }
+
+  if (command === "quick") {
+    const [action, id] = args;
+    if (action === "start" && id) {
+      await startQuick(cwd, id);
+      console.log(`Quick work started: ${id}`);
+      return 0;
+    }
+    if (action === "finish") {
+      const message = args.find((arg) => arg.startsWith("--message="))?.slice(10) ?? "";
+      const memory = args.find((arg) => arg.startsWith("--memory="))?.slice(9);
+      const commit = await finishQuick(cwd, message, memory as "updated" | "unchanged");
+      console.log(`Quick work committed: ${commit}`);
+      return 0;
+    }
+    if (action === "cancel") {
+      await cancelQuick(cwd);
+      console.log("Quick work cancelled; project changes were preserved.");
+      return 0;
+    }
+    throw new Error("Usage: ways quick start <id> | finish --message=<subject> --memory=<updated|unchanged> | cancel");
   }
 
   if (command === "query") {
