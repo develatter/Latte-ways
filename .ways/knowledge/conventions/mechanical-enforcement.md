@@ -1,6 +1,7 @@
 ---
 type: convention
-status: draft
+status: stable
+verified: { by: human:alejandro.lopez, at: 2026-09-02T09:20:00Z }
 generated: { by: orchestrator/enforcement-and-status, at: 2026-09-02T09:10:00Z }
 sources:
   - resource: /src/hooks/hook.ts
