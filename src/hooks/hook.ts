@@ -21,6 +21,11 @@ async function headState(git: GitRepository): Promise<WorkState | undefined> {
   }
 }
 
+async function stagesStateDeletion(git: GitRepository): Promise<boolean> {
+  const output = await git.run(["diff", "--cached", "--name-only", "--diff-filter=D", "--", STATE_PATH]);
+  return output.split("\n").includes(STATE_PATH);
+}
+
 async function headHasManifest(git: GitRepository): Promise<boolean> {
   try {
     await git.run(["cat-file", "-e", `HEAD:${MANIFEST_PATH}`]);
@@ -42,10 +47,12 @@ export async function judgeCommitMessage(cwd: string, message: string): Promise<
 
   const closing = await headState(git);
   if (closing) {
-    if (trailers.work === closing.id && trailers.state && CLOSING_STATES.has(trailers.state)) {
+    const traced = trailers.work === closing.id && trailers.state !== undefined && CLOSING_STATES.has(trailers.state);
+    const phased = closing.mode !== "sdd" || trailers.state === "cancelled" || trailers.phase === "close";
+    if (traced && phased && await stagesStateDeletion(git)) {
       return { accepted: true, reason: `Closing commit for ${closing.id}` };
     }
-    return { accepted: false, reason: `HEAD still records work ${closing.id}; only its closing commit may follow. Run ways repair diagnose` };
+    return { accepted: false, reason: `HEAD still records work ${closing.id}; only its closing commit, deleting ${STATE_PATH}, may follow. Run ways repair diagnose` };
   }
 
   if (!await headHasManifest(git)) return { accepted: true, reason: "Bootstrap commit accepted" };

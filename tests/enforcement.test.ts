@@ -1,4 +1,6 @@
-import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
+import { mkdir, mkdtemp, readFile, rm, symlink, writeFile } from "node:fs/promises";
+import { execFile } from "node:child_process";
+import { promisify } from "node:util";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
@@ -10,7 +12,9 @@ import { auditCommits, checkHistory } from "../src/integrity/history.js";
 import { checkIntegrity } from "../src/integrity/integrity.js";
 import { projectStatus, readStatus } from "../src/state/status.js";
 import { loadState } from "../src/state/store.js";
-import { finishQuick, startQuick } from "../src/work/quick.js";
+import { cancelQuick, finishQuick, startQuick } from "../src/work/quick.js";
+import { integrateTask, prepareTask } from "../src/work/tasks.js";
+import { saveState } from "../src/state/store.js";
 import { advanceSdd, startSdd } from "../src/work/sdd.js";
 
 async function repository(): Promise<{ cwd: string; git: GitRepository }> {
@@ -28,6 +32,8 @@ async function repository(): Promise<{ cwd: string; git: GitRepository }> {
   return { cwd, git };
 }
 
+const execFileAsync = promisify(execFile);
+
 async function fillPhase(cwd: string, id: string, phase: string): Promise<void> {
   await writeFile(join(cwd, ".ways", "sdd", id, `${phase}.md`), `# ${phase}\n\nGoal: x\nEvidence: y\nDecision: z\nGate: go\n`);
 }
@@ -43,6 +49,14 @@ describe("status artifact", () => {
     await writeFile(join(cwd, "a.txt"), "a\n");
     await finishQuick(cwd, "fix: a", "unchanged");
     expect((await readStatus(cwd))?.active).toBe(false);
+  });
+
+  it("leaves no diff behind when quick work is cancelled", async () => {
+    const { cwd, git } = await repository();
+    await startQuick(cwd, "tiny-fix");
+    await cancelQuick(cwd);
+    expect(await git.status()).toEqual([]);
+    await startQuick(cwd, "next-fix");
   });
 
   it("marks supervised human gates", async () => {
@@ -69,7 +83,7 @@ describe("commit-msg hook", () => {
     expect((await judgeCommitMessage(cwd, "sneaky")).reason).toMatch(/ways quick start/);
   });
 
-  it("requires the active work id and accepts closing commits from HEAD state", async () => {
+  it("requires the active work id and accepts a staged closing commit from HEAD state", async () => {
     const { cwd, git } = await repository();
     await startSdd(cwd, "traced", "autonomous");
     expect((await judgeCommitMessage(cwd, "x\n\nHarness-Work: other")).accepted).toBe(false);
@@ -78,10 +92,50 @@ describe("commit-msg hook", () => {
     await advanceSdd(cwd);
     expect(await git.run(["show", "HEAD:.ways/state/current.json"])).toContain("\"traced\"");
     await rm(join(cwd, ".ways/state/current.json"));
-    const closing = await judgeCommitMessage(cwd, "done\n\nHarness-Work: traced\nHarness-State: completed");
-    expect(closing.accepted).toBe(true);
-    const wrong = await judgeCommitMessage(cwd, "done\n\nHarness-Work: traced\nHarness-State: proposed");
+    await git.run(["add", "-A", ".ways/state"]);
+    const wrong = await judgeCommitMessage(cwd, "done\n\nHarness-Work: traced\nHarness-Phase: close\nHarness-State: proposed");
     expect(wrong.accepted).toBe(false);
+    const cancelled = await judgeCommitMessage(cwd, "done\n\nHarness-Work: traced\nHarness-State: cancelled");
+    expect(cancelled.accepted).toBe(true);
+  });
+
+  it("rejects a hand-written closing commit that keeps the state file", async () => {
+    const { cwd, git } = await repository();
+    await startSdd(cwd, "forged", "autonomous");
+    await fillPhase(cwd, "forged", "intake");
+    await advanceSdd(cwd);
+    await rm(join(cwd, ".ways/state/current.json"));
+    const unstaged = await judgeCommitMessage(cwd, "done\n\nHarness-Work: forged\nHarness-Phase: close\nHarness-State: completed");
+    expect(unstaged.accepted).toBe(false);
+    await git.run(["add", "-A", ".ways/state"]);
+    const noPhase = await judgeCommitMessage(cwd, "done\n\nHarness-Work: forged\nHarness-State: completed");
+    expect(noPhase.accepted).toBe(false);
+    const closing = await judgeCommitMessage(cwd, "done\n\nHarness-Work: forged\nHarness-Phase: close\nHarness-State: completed");
+    expect(closing.accepted).toBe(true);
+  });
+
+  it("resolves the CLI from a consumer node_modules inside a task worktree without WAYS_CLI", async () => {
+    const { cwd, git } = await repository();
+    await mkdir(join(cwd, "node_modules"));
+    await symlink(join(import.meta.dirname, ".."), join(cwd, "node_modules", "latte-ways"));
+    const head = await git.head();
+    await saveState(cwd, {
+      schemaVersion: 1, harnessVersion: "0.1.0", id: "wt", mode: "sdd", status: "active", profile: "autonomous",
+      phase: "implement", lastCompletedPhase: "decompose", baseCommit: head, gateCommit: await git.parent(head),
+      createdAt: new Date().toISOString(), updatedAt: new Date().toISOString(),
+      tasks: [{ id: "api", title: "Build API", status: "ready", dependsOn: [], commits: [] }],
+    });
+    const gate = await git.commit(await git.changedPaths(), "sdd(decompose): complete wt", { work: "wt", phase: "decompose", state: "completed" });
+    const task = await prepareTask(cwd, "api");
+    await writeFile(join(task.worktree!, "api.ts"), "export const api = true;\n");
+    const env = { ...process.env };
+    delete env.WAYS_CLI;
+    await execFileAsync("git", ["add", "api.ts"], { cwd: task.worktree! });
+    await expect(execFileAsync("git", ["commit", "-q", "-m", "feat: api"], { cwd: task.worktree!, env })).rejects.toThrow(/Active sdd work is wt/);
+    await execFileAsync("git", ["commit", "-q", "-m", "feat: api", "-m", "Harness-Work: wt\nHarness-Task: api"], { cwd: task.worktree!, env });
+    const worker = new GitRepository(task.worktree!);
+    await integrateTask(cwd, "api", [await worker.head()]);
+    expect(await checkHistory(cwd, { since: gate })).toEqual([]);
   });
 
   it("lets the harness create its own gate commits", async () => {
@@ -114,6 +168,16 @@ describe("history verification", () => {
     expect(issues).toHaveLength(1);
     expect(issues[0]?.code).toBe("history-untraced");
     expect(await checkHistory(cwd, { since: "HEAD" })).toEqual([]);
+  });
+
+  it("accepts a complete SDD certification chain", async () => {
+    const { cwd } = await repository();
+    await startSdd(cwd, "chain", "autonomous");
+    for (const phase of ["intake", "explore", "assess"]) {
+      await fillPhase(cwd, "chain", phase);
+      await advanceSdd(cwd);
+    }
+    expect(await checkHistory(cwd)).toEqual([]);
   });
 
   it("fails integrity for commits inside an active work that lack its trailer", async () => {

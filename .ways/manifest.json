@@ -11,6 +11,6 @@
     ".ways/agents/reviewer.md": "36ec6f6f059bdda2e9a40131d21c19014d3ad7a279dbb6e5dc2de4125dbfa9e9",
     ".ways/agents/orchestrator.md": "898cb25c9b162406e3b251b05fb063d2038b69352262eca2fc5b1e172e5bccf2",
     ".ways/.gitignore": "bf8cd769ff4e47c7f82e7c84ba7b2c6c2f56a24fb27bb77dbfa815870d396c8f",
-    ".ways/hooks/commit-msg": "b0e02e2a27dce1282c2532308f8b9dc8515a0dfc0c698e1955ca0e47c181a54d"
+    ".ways/hooks/commit-msg": "1a654a3a0869431afa04fd3d30924ef3daabacf56c6ceedec824cab24ffc101e"
   }
 }

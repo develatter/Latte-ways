@@ -25,9 +25,8 @@ async function resolveAnchor(cwd: string, git: GitRepository, since?: string): P
   return manifestIntroduction(git);
 }
 
-export async function commitsAfter(git: GitRepository, anchor: string | undefined): Promise<CommitInfo[]> {
-  const range = anchor ? `${anchor}..HEAD` : "HEAD";
-  const output = await git.run(["rev-list", "--first-parent", "--reverse", range]);
+export async function commitsAfter(git: GitRepository, anchor: string): Promise<CommitInfo[]> {
+  const output = await git.run(["rev-list", "--topo-order", "--reverse", `${anchor}..HEAD`]);
   const commits: CommitInfo[] = [];
   for (const hash of output.split("\n").filter(Boolean)) commits.push(await git.commitInfo(hash));
   return commits;
@@ -39,8 +38,8 @@ export function auditCommits(commits: readonly CommitInfo[]): IntegrityIssue[] {
   for (const commit of commits) {
     const { work, phase, state } = commit.trailers;
     const path = commit.hash.slice(0, 12);
-    if (!work || !state) {
-      issues.push({ code: "history-untraced", path, message: `Commit "${commit.subject}" lacks Harness-Work/Harness-State trailers` });
+    if (!work || (!state && !commit.trailers.task)) {
+      issues.push({ code: "history-untraced", path, message: `Commit "${commit.subject}" lacks Harness-Work with Harness-State or Harness-Task trailers` });
       continue;
     }
     if (state !== "completed" || !phase || !SDD_PHASES.includes(phase as SddPhase)) continue;
@@ -59,5 +58,6 @@ export function auditCommits(commits: readonly CommitInfo[]): IntegrityIssue[] {
 export async function checkHistory(cwd: string, options: HistoryOptions = {}): Promise<IntegrityIssue[]> {
   const git = new GitRepository(cwd);
   const anchor = await resolveAnchor(cwd, git, options.since);
+  if (!anchor) return [];
   return auditCommits(await commitsAfter(git, anchor));
 }

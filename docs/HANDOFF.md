@@ -61,6 +61,7 @@ Take latte-ways from a functional MVP to a dogfood-ready harness. Preserve its m
 
 - Human approval is currently a CLI boolean and can be forged by an agent.
 - Hooks can be bypassed with `--no-verify` or a relocated `WAYS_CLI`; `ways check --history` in CI is the backstop.
+- The hook resolves the CLI from the main worktree: `WAYS_CLI`, then `node_modules/latte-ways`, then this package's own `dist/`, then `npx --no-install`. The CLI entry guard resolves symlinks, so linked installs are not silent no-ops.
 - Reviewer identity is declarative; read-only behavior is a protocol rather than a sandbox.
 - Git/state operations have recovery commands but are not yet transaction-journaled.
 - Worktree integration has happy-path coverage; conflict recovery needs dedicated states.

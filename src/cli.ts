@@ -1,5 +1,6 @@
 #!/usr/bin/env node
 
+import { realpathSync } from "node:fs";
 import { pathToFileURL } from "node:url";
 import { bootstrap } from "./bootstrap/bootstrap.js";
 import { runChecks } from "./check/check.js";
@@ -10,7 +11,7 @@ import { writeIndexes } from "./knowledge/indexes.js";
 import { inspectOkf } from "./knowledge/okf.js";
 import { queryKnowledge } from "./query/query.js";
 import { adoptHead, diagnose, restoreStateFromHead, rollbackToLastGate } from "./repair/repair.js";
-import { projectStatus } from "./state/status.js";
+import { projectStatus, readStatus, statusMatches } from "./state/status.js";
 import { loadState } from "./state/store.js";
 import { abandonPlan, finishPlan, promotePlan, proposePlan, startPlan } from "./work/plan.js";
 import { cancelQuick, finishQuick, startQuick } from "./work/quick.js";
@@ -72,7 +73,8 @@ export async function run(argv: readonly string[], cwd = process.cwd()): Promise
   if (command === "status") {
     const state = await loadState(cwd);
     if (args.includes("--json")) {
-      console.log(JSON.stringify(projectStatus(state), null, 2));
+      const artifact = await readStatus(cwd);
+      console.log(JSON.stringify(statusMatches(artifact, state) ? artifact : projectStatus(state), null, 2));
       return 0;
     }
     console.log(state ? JSON.stringify(state, null, 2) : "No active mutating work.");
@@ -242,7 +244,16 @@ export async function run(argv: readonly string[], cwd = process.cwd()): Promise
   return 1;
 }
 
-if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
+function invokedDirectly(): boolean {
+  if (!process.argv[1]) return false;
+  try {
+    return import.meta.url === pathToFileURL(realpathSync(process.argv[1])).href;
+  } catch {
+    return false;
+  }
+}
+
+if (invokedDirectly()) {
   run(process.argv.slice(2)).then((code) => {
     process.exitCode = code;
   }).catch((error: unknown) => {

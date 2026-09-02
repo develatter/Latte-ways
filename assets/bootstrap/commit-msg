@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
 # Managed by latte-ways. Rejects commits that are not traced to an active work.
 set -euo pipefail
-root="$(git rev-parse --show-toplevel)"
-cd "$root"
+main="$(dirname "$(git rev-parse --path-format=absolute --git-common-dir)")"
 if [[ -n "${WAYS_CLI:-}" ]]; then exec node "$WAYS_CLI" hook commit-msg "$1"; fi
-if [[ -f dist/cli.js && -f assets/bootstrap/commit-msg ]]; then exec node dist/cli.js hook commit-msg "$1"; fi
-exec npx --no-install ways hook commit-msg "$1"
+if [[ -f "$main/node_modules/latte-ways/dist/cli.js" ]]; then exec node "$main/node_modules/latte-ways/dist/cli.js" hook commit-msg "$1"; fi
+if [[ -f "$main/dist/cli.js" && -f "$main/assets/bootstrap/commit-msg" ]]; then exec node "$main/dist/cli.js" hook commit-msg "$1"; fi
+cd "$main" && exec npx --no-install ways hook commit-msg "$1"
