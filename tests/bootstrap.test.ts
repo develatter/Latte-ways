@@ -24,15 +24,22 @@ describe("bootstrap", () => {
     expect(await readlink(join(cwd, "CLAUDE.md"))).toBe("AGENTS.md");
     expect(await readFile(join(cwd, "scripts/check.sh"), "utf8")).toContain("ways check");
     expect(manifest.managedFiles["AGENTS.md"]).toMatch(/^[a-f0-9]{64}$/);
-    expect(JSON.parse(await readFile(join(cwd, ".ways/config.json"), "utf8")).testCommand).toEqual(["npm", "test"]);
+    const config = JSON.parse(await readFile(join(cwd, ".ways/config.json"), "utf8"));
+    expect(config.testCommand).toEqual(["npm", "test"]);
+    expect(config.memory).toMatchObject({ releaseBranch: "main", reconciliationBranchPattern: "reconcile/*" });
     expect(await readFile(join(cwd, ".ways/.gitignore"), "utf8")).toContain("indexes/");
+    for (const type of ["roadmap", "debt", "deprecated"]) expect(await readFile(join(cwd, `.ways/knowledge/${type}/index.md`), "utf8")).toContain("# Concepts");
     expect(JSON.parse(await readFile(join(cwd, ".ways/memory/discovery.json"), "utf8"))).toMatchObject({ kind: "bootstrap", status: "review-required" });
     await expect(readFile(join(cwd, ".ways/indexes/search.json"), "utf8")).rejects.toMatchObject({ code: "ENOENT" });
   });
 
-  it("does not silently overwrite managed files", async () => {
+  it("resumes interrupted or repeated installation but does not overwrite divergence", async () => {
     const cwd = await repository();
     await bootstrap({ cwd, testCommand: ["npm", "test"] });
-    await expect(bootstrap({ cwd, testCommand: ["npm", "test"] })).rejects.toThrow("overwrite");
+    const pending = await readFile(join(cwd, ".ways/memory/discovery.json"), "utf8");
+    await bootstrap({ cwd, testCommand: ["npm", "test"] });
+    expect(await readFile(join(cwd, ".ways/memory/discovery.json"), "utf8")).toBe(pending);
+    await writeFile(join(cwd, "AGENTS.md"), "local contract\n");
+    await expect(bootstrap({ cwd, testCommand: ["npm", "test"] })).rejects.toThrow("overwrite AGENTS.md");
   });
 });

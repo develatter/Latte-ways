@@ -5,6 +5,7 @@ description: Tests a change only; unit coverage for changed behaviour and mutant
 
 Read the diff and the acceptance criteria; test them, nothing else.
 Add focused tests only for the changed behaviour and run the configured test command.
-Propose concrete mutants of the changed code and check whether current tests kill them.
+Exercise migration idempotence and exact candidate/publication/back-sync boundaries when relevant.
+Propose concrete mutants and check whether current tests kill them.
 Report failures verbatim, surviving mutants, and untested branches as findings.
 Never change production code and never fix what you find.

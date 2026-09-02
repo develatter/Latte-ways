@@ -1,15 +1,35 @@
 #!/usr/bin/env node
 
 import { realpathSync } from "node:fs";
+import { readFile } from "node:fs/promises";
+import { isAbsolute, join } from "node:path";
 import { pathToFileURL } from "node:url";
 import { installAdapter, PROVIDERS } from "./adapters/install.js";
 import { bootstrap } from "./bootstrap/bootstrap.js";
 import { runChecks } from "./check/check.js";
+import { effectiveMemoryConfig, loadConfig } from "./config/config.js";
 import { runCommitMsgHook } from "./hooks/hook.js";
 import { checkHistory } from "./integrity/history.js";
+import { stableJson, writeAtomic } from "./fs/files.js";
 import { HARNESS_NAME, HARNESS_VERSION } from "./index.js";
 import { writeIndexes } from "./knowledge/indexes.js";
 import { inspectOkf } from "./knowledge/okf.js";
+import type { MemoryState, ReconciliationEvidence } from "./memory/model.js";
+import {
+  inspectReconciliationCandidate,
+  validateBackSyncMerge,
+  validatePublicationMerge,
+  validateReconciliationEvidence,
+  type ReconciliationRequest,
+} from "./memory/reconciliation.js";
+import {
+  commitMemory,
+  completeDiscovery,
+  discoveryReviewDigest,
+  MEMORY_STATE_PATH,
+  memoryCommitReviewDigest,
+  requestDiscovery,
+} from "./memory/workflow.js";
 import { queryKnowledgeResult } from "./query/query.js";
 import { adoptHead, diagnose, restoreStateFromHead, rollbackToLastGate } from "./repair/repair.js";
 import { projectStatus, readStatus, statusMatches } from "./state/status.js";
@@ -21,6 +41,33 @@ import { reviewDigest, submitReview } from "./work/review.js";
 import { advanceSdd, downgradeSdd, startSdd } from "./work/sdd.js";
 import { addTask, integrateTask, prepareTask } from "./work/tasks.js";
 import { applyUpgrade, planUpgrade } from "./upgrade/upgrade.js";
+
+function option(args: readonly string[], name: string): string | undefined {
+  return args.find((arg) => arg.startsWith(`${name}=`))?.slice(name.length + 1);
+}
+
+function options(args: readonly string[], name: string): string[] {
+  return args.filter((arg) => arg.startsWith(`${name}=`)).map((arg) => arg.slice(name.length + 1));
+}
+
+function requiredOption(args: readonly string[], name: string): string {
+  const value = option(args, name);
+  if (!value) throw new Error(`Missing required option ${name}=<value>`);
+  return value;
+}
+
+function userPath(cwd: string, path: string): string {
+  return isAbsolute(path) ? path : join(cwd, path);
+}
+
+async function readJson<T>(cwd: string, path: string): Promise<T> {
+  return JSON.parse(await readFile(isAbsolute(path) ? path : join(cwd, path), "utf8")) as T;
+}
+
+function printIssues(issues: readonly { code: string; path: string; message: string }[]): number {
+  for (const issue of issues) console.error(`${issue.code}: ${issue.path}: ${issue.message}`);
+  return issues.length === 0 ? 0 : 1;
+}
 
 export async function run(argv: readonly string[], cwd = process.cwd()): Promise<number> {
   const [command, ...args] = argv;
@@ -200,15 +247,14 @@ export async function run(argv: readonly string[], cwd = process.cwd()): Promise
     }
     if (action === "finish") {
       const message = args.find((arg) => arg.startsWith("--message="))?.slice(10) ?? "";
-      const memory = args.find((arg) => arg.startsWith("--memory="))?.slice(9);
-      console.log(`Plan completed: ${await finishPlan(cwd, message, memory as "updated" | "unchanged")}`);
+      console.log(`Plan completed: ${await finishPlan(cwd, message)}`);
       return 0;
     }
     if (action === "abandon") {
       console.log(`Plan abandoned: ${await abandonPlan(cwd)}`);
       return 0;
     }
-    throw new Error("Usage: ways plan start <id> | propose | promote [--supervised] [--delegated] | finish --message=<subject> --memory=<updated|unchanged> | abandon");
+    throw new Error("Usage: ways plan start <id> | propose | promote [--supervised] [--delegated] | finish --message=<subject> | abandon");
   }
 
   if (command === "quick") {
@@ -220,8 +266,7 @@ export async function run(argv: readonly string[], cwd = process.cwd()): Promise
     }
     if (action === "finish") {
       const message = args.find((arg) => arg.startsWith("--message="))?.slice(10) ?? "";
-      const memory = args.find((arg) => arg.startsWith("--memory="))?.slice(9);
-      const commit = await finishQuick(cwd, message, memory as "updated" | "unchanged");
+      const commit = await finishQuick(cwd, message);
       console.log(`Quick work committed: ${commit}`);
       return 0;
     }
@@ -230,11 +275,11 @@ export async function run(argv: readonly string[], cwd = process.cwd()): Promise
       console.log("Quick work cancelled; project changes were preserved.");
       return 0;
     }
-    throw new Error("Usage: ways quick start <id> | finish --message=<subject> --memory=<updated|unchanged> | cancel");
+    throw new Error("Usage: ways quick start <id> | finish --message=<subject> | cancel");
   }
 
   if (command === "memory") {
-    const [action] = args;
+    const [action, subaction, positional] = args;
     if (action === "index") {
       const indexes = await writeIndexes(cwd);
       console.log(`Indexed ${indexes.catalog.documents.length} concepts.`);
@@ -245,7 +290,70 @@ export async function run(argv: readonly string[], cwd = process.cwd()): Promise
       for (const issue of result.issues) console.error(`${issue.code}: ${issue.path}: ${issue.message}`);
       return result.issues.length === 0 ? 0 : 1;
     }
-    throw new Error("Usage: ways memory check | index");
+    if (action === "discovery") {
+      if (subaction === "request") {
+        const request = await requestDiscovery(cwd, args.includes("--rediscover"));
+        console.log(JSON.stringify(request, null, 2));
+        return 0;
+      }
+      if (subaction === "digest") {
+        console.log(await discoveryReviewDigest(cwd));
+        return 0;
+      }
+      if (subaction === "complete" && positional) {
+        console.log(JSON.stringify(await completeDiscovery(cwd, userPath(cwd, positional)), null, 2));
+        return 0;
+      }
+      throw new Error("Usage: ways memory discovery request [--rediscover] | digest | complete <review.json>");
+    }
+    if (action === "commit") {
+      const implementation = requiredOption(args, "--implementation");
+      if (subaction === "digest") {
+        console.log(await memoryCommitReviewDigest(cwd, implementation));
+        return 0;
+      }
+      if (subaction === "create") {
+        const review = userPath(cwd, requiredOption(args, "--review"));
+        const message = requiredOption(args, "--message");
+        console.log(`Memory committed: ${await commitMemory(cwd, implementation, review, message)}`);
+        return 0;
+      }
+      throw new Error("Usage: ways memory commit digest --implementation=<from>..<to> | create --implementation=<from>..<to> --review=<review.json> --message=<subject>");
+    }
+    if (action === "reconcile") {
+      const config = effectiveMemoryConfig(await loadConfig(cwd));
+      if (subaction === "inspect" && positional) {
+        const result = await inspectReconciliationCandidate(cwd, config, await readJson<ReconciliationRequest>(cwd, positional));
+        const output = option(args, "--output");
+        if (output && result.issues.length === 0) await writeAtomic(userPath(cwd, output), stableJson(result.evidence));
+        console.log(JSON.stringify(result, null, 2));
+        return printIssues(result.issues);
+      }
+      if (subaction === "validate" && positional) {
+        const evidence = await readJson<ReconciliationEvidence>(cwd, positional);
+        const statePath = option(args, "--state") ?? join(cwd, MEMORY_STATE_PATH);
+        const claims = JSON.parse(requiredOption(args, "--unresolved-claims")) as unknown;
+        if (!Array.isArray(claims) || !claims.every((claim) => typeof claim === "string")) throw new Error("--unresolved-claims must be a JSON string array");
+        const issues = await validateReconciliationEvidence(cwd, config, evidence, {
+          state: await readJson<MemoryState>(cwd, statePath),
+          reconcileRef: requiredOption(args, "--reconcile"),
+          currentTargetRef: requiredOption(args, "--target"),
+          unresolvedClaims: claims,
+        });
+        return printIssues(issues);
+      }
+      if (subaction === "publication" && positional) {
+        const result = await validatePublicationMerge(cwd, config, await readJson<ReconciliationEvidence>(cwd, positional), requiredOption(args, "--publication"), requiredOption(args, "--reconcile"));
+        return printIssues(result.issues);
+      }
+      if (subaction === "back-sync") {
+        const result = await validateBackSyncMerge(cwd, config, requiredOption(args, "--publication"), requiredOption(args, "--integration-before"), requiredOption(args, "--back-sync"));
+        if (result.issues.length === 0) console.log(result.status);
+        return printIssues(result.issues);
+      }
+      throw new Error("Usage: ways memory reconcile inspect <request.json> [--output=<evidence.json>] | validate <evidence.json> --state=<state.json> --reconcile=<ref> --target=<ref> --unresolved-claims='[]' | publication <evidence.json> --publication=<ref> --reconcile=<ref> | back-sync --publication=<ref> --integration-before=<ref> --back-sync=<ref>");
+    }
+    throw new Error("Usage: ways memory check | index | discovery ... | commit ... | reconcile ...");
   }
 
   if (command === "query") {
@@ -267,8 +375,23 @@ export async function run(argv: readonly string[], cwd = process.cwd()): Promise
     if (!Array.isArray(testCommand) || !testCommand.every((part) => typeof part === "string")) {
       throw new Error("--test-command must be a JSON string array");
     }
-    await bootstrap({ cwd, testCommand, force, adapters: !args.includes("--no-adapters") });
-    console.log("Harness bootstrapped.");
+    const relevantPaths = options(args, "--relevant-path");
+    const excludedPaths = options(args, "--exclude-path");
+    const integrationBranch = option(args, "--integration-branch");
+    await bootstrap({
+      cwd,
+      testCommand,
+      force,
+      adapters: !args.includes("--no-adapters"),
+      memory: {
+        releaseBranch: option(args, "--release-branch") ?? "main",
+        ...(integrationBranch ? { integrationBranch } : {}),
+        reconciliationBranchPattern: option(args, "--reconciliation-branch-pattern") ?? "reconcile/*",
+        ...(relevantPaths.length ? { relevantPaths } : {}),
+        ...(excludedPaths.length ? { excludedPaths } : {}),
+      },
+    });
+    console.log("Harness installed; complete the required discovery review with `ways memory discovery digest` and `ways memory discovery complete <review.json>`. ");
     return 0;
   }
 

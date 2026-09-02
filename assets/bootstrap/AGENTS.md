@@ -6,5 +6,6 @@
 - Every change, however small, opens `npx ways quick start <id>`; commits outside an active work are rejected.
 - In this package, change `src/`, `assets/`, and `tests/`; never edit `dist/`.
 - Keep commits atomic and run `scripts/check.sh` before completion.
-- Reconcile durable facts with `.ways/knowledge/`; do not store progress there.
-- Change managed files through their source templates, then regenerate them.
+- Treat `.ways/knowledge/` as durable current truth: assess semantic impact progressively, create separately reviewed memory commits when needed, and never require no-op memory artifacts.
+- Complete reviewed discovery after bootstrap; run full rediscovery only on explicit request, and validate reconciliation before release.
+- Derived `.ways/indexes/` are disposable caches; change managed files through source templates, then regenerate them.
