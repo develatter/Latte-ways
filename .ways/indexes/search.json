@@ -55,6 +55,12 @@
     "appear": [
       "conventions/provider-adapters"
     ],
+    "approval": [
+      "conventions/mechanical-enforcement"
+    ],
+    "approve": [
+      "conventions/mechanical-enforcement"
+    ],
     "are": [
       "conventions/mechanical-enforcement",
       "conventions/provider-adapters"
@@ -74,6 +80,12 @@
     "be": [
       "conventions/provider-adapters"
     ],
+    "before": [
+      "conventions/mechanical-enforcement"
+    ],
+    "binds": [
+      "conventions/mechanical-enforcement"
+    ],
     "bootstrap": [
       "conventions/provider-adapters"
     ],
@@ -89,6 +101,9 @@
     ],
     "canonical": [
       "conventions/provider-adapters"
+    ],
+    "carry": [
+      "conventions/mechanical-enforcement"
     ],
     "caught": [
       "conventions/mechanical-enforcement"
@@ -135,12 +150,21 @@
     "commits": [
       "conventions/mechanical-enforcement"
     ],
+    "committed": [
+      "conventions/mechanical-enforcement"
+    ],
     "compliance": [
       "conventions/mechanical-enforcement"
     ],
     "conventions": [
       "conventions/mechanical-enforcement",
       "conventions/provider-adapters"
+    ],
+    "copy": [
+      "conventions/mechanical-enforcement"
+    ],
+    "decides": [
+      "conventions/mechanical-enforcement"
     ],
     "delegated": [
       "conventions/mechanical-enforcement"
@@ -154,8 +178,23 @@
     "derived": [
       "conventions/mechanical-enforcement"
     ],
+    "die": [
+      "conventions/mechanical-enforcement"
+    ],
+    "diff": [
+      "conventions/mechanical-enforcement"
+    ],
+    "digest": [
+      "conventions/mechanical-enforcement"
+    ],
+    "disk": [
+      "conventions/mechanical-enforcement"
+    ],
     "each": [
       "conventions/provider-adapters"
+    ],
+    "edit": [
+      "conventions/mechanical-enforcement"
     ],
     "edits": [
       "conventions/mechanical-enforcement"
@@ -180,10 +219,20 @@
       "conventions/mechanical-enforcement"
     ],
     "files": [
+      "conventions/mechanical-enforcement",
       "conventions/provider-adapters"
+    ],
+    "filled": [
+      "conventions/mechanical-enforcement"
+    ],
+    "final": [
+      "conventions/mechanical-enforcement"
     ],
     "finishing": [
       "conventions/provider-adapters"
+    ],
+    "flags": [
+      "conventions/mechanical-enforcement"
     ],
     "flexible": [
       "conventions/mechanical-enforcement"
@@ -193,6 +242,7 @@
       "conventions/provider-adapters"
     ],
     "from": [
+      "conventions/mechanical-enforcement",
       "conventions/provider-adapters"
     ],
     "function": [
@@ -201,8 +251,14 @@
     "gate": [
       "conventions/mechanical-enforcement"
     ],
+    "gates": [
+      "conventions/mechanical-enforcement"
+    ],
     "guard": [
       "conventions/provider-adapters"
+    ],
+    "harness": [
+      "conventions/mechanical-enforcement"
     ],
     "harness-state": [
       "conventions/mechanical-enforcement"
@@ -219,11 +275,20 @@
     "hashes": [
       "conventions/mechanical-enforcement"
     ],
+    "head": [
+      "conventions/mechanical-enforcement"
+    ],
     "hook": [
+      "conventions/mechanical-enforcement"
+    ],
+    "human": [
       "conventions/mechanical-enforcement"
     ],
     "idempotent": [
       "conventions/provider-adapters"
+    ],
+    "identity": [
+      "conventions/mechanical-enforcement"
     ],
     "implement": [
       "conventions/mechanical-enforcement"
@@ -313,8 +378,14 @@
     "must": [
       "conventions/mechanical-enforcement"
     ],
+    "name": [
+      "conventions/mechanical-enforcement"
+    ],
     "names": [
       "conventions/provider-adapters"
+    ],
+    "needs": [
+      "conventions/mechanical-enforcement"
     ],
     "never": [
       "conventions/mechanical-enforcement",
@@ -364,6 +435,15 @@
     "otherwise": [
       "conventions/mechanical-enforcement"
     ],
+    "pass": [
+      "conventions/mechanical-enforcement"
+    ],
+    "path": [
+      "conventions/mechanical-enforcement"
+    ],
+    "phase": [
+      "conventions/mechanical-enforcement"
+    ],
     "placeholders": [
       "conventions/provider-adapters"
     ],
@@ -373,6 +453,9 @@
     "plus": [
       "conventions/mechanical-enforcement",
       "conventions/provider-adapters"
+    ],
+    "profile": [
+      "conventions/mechanical-enforcement"
     ],
     "projection": [
       "conventions/mechanical-enforcement"
@@ -413,6 +496,9 @@
     "readable": [
       "conventions/mechanical-enforcement"
     ],
+    "real": [
+      "conventions/mechanical-enforcement"
+    ],
     "recorded": [
       "conventions/mechanical-enforcement"
     ],
@@ -441,9 +527,15 @@
     "restricted": [
       "conventions/provider-adapters"
     ],
+    "review": [
+      "conventions/mechanical-enforcement"
+    ],
     "reviewer": [
       "conventions/mechanical-enforcement",
       "conventions/provider-adapters"
+    ],
+    "reviews": [
+      "conventions/mechanical-enforcement"
     ],
     "role": [
       "conventions/provider-adapters"
@@ -472,6 +564,9 @@
     ],
     "shared": [
       "conventions/provider-adapters"
+    ],
+    "since": [
+      "conventions/mechanical-enforcement"
     ],
     "six": [
       "conventions/provider-adapters"
@@ -507,10 +602,14 @@
     "subagents": [
       "conventions/mechanical-enforcement"
     ],
+    "supervised": [
+      "conventions/mechanical-enforcement"
+    ],
     "task": [
       "conventions/mechanical-enforcement"
     ],
     "that": [
+      "conventions/mechanical-enforcement",
       "conventions/provider-adapters"
     ],
     "the": [
@@ -534,6 +633,12 @@
       "conventions/mechanical-enforcement"
     ],
     "trailers": [
+      "conventions/mechanical-enforcement"
+    ],
+    "tty": [
+      "conventions/mechanical-enforcement"
+    ],
+    "typed": [
       "conventions/mechanical-enforcement"
     ],
     "under": [

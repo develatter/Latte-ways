@@ -21,3 +21,5 @@ Compliance never depends on an agent obeying its prompt. Three layers make it me
 Flexible means choosing the ceremony (`quick`, `plan`, `sdd`), never skipping it. Every change opens `quick` at minimum.
 
 SDD runs inline or delegated. In delegated execution the main session is the orchestrator and never edits code: the implement gate only accepts commit hashes recorded by `task integrate`, so trailers alone prove nothing. Implementer, reviewer and qa are separate subagents with opposed objectives; the reviewer assumes the change is wrong until proven otherwise.
+
+Human gates are files, not flags. `ways approve` is the only harness path: it needs a real TTY and a typed phase name, and binds the approval to work, phase, gate commit and the digest of the diff since that gate. Supervised work opens with a traced commit so the state committed at HEAD, not the copy on disk, decides identity and profile. Reviews carry the digest from `ways review digest` and die on any later edit, so the review phase file is filled before the final review pass.
