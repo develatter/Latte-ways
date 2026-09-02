@@ -1,0 +1,15 @@
+{
+  "schemaVersion": 1,
+  "harnessVersion": "0.1.0",
+  "id": "delegated-execution",
+  "mode": "sdd",
+  "status": "active",
+  "profile": "autonomous",
+  "phase": "explore",
+  "baseCommit": "92ed986f01ef50eb753515346acdaf1dca3be405",
+  "gateCommit": "92ed986f01ef50eb753515346acdaf1dca3be405",
+  "createdAt": "2026-09-02T10:53:40.558Z",
+  "updatedAt": "2026-09-02T10:54:08.846Z",
+  "tasks": [],
+  "lastCompletedPhase": "intake"
+}

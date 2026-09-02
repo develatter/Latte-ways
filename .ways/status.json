@@ -1,5 +1,12 @@
 {
   "schemaVersion": 1,
-  "active": false,
-  "updatedAt": "2026-09-02T09:29:00.412Z"
+  "active": true,
+  "mode": "sdd",
+  "id": "delegated-execution",
+  "status": "active",
+  "gateCommit": "92ed986f01ef50eb753515346acdaf1dca3be405",
+  "updatedAt": "2026-09-02T10:54:08.846Z",
+  "phase": "explore",
+  "humanGate": false,
+  "profile": "autonomous"
 }
