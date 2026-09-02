@@ -90,9 +90,9 @@ Compliance does not depend on the agent obeying its prompt:
 
 ## Provider adapters
 
-`assets/adapters/` is the canonical source: eight commands, seven roles (orchestrator, explorer, implementer, reviewer, qa-unit, qa-mutation, sweeper) with prompts of at most six lines, a statusline script, and a commit guard. Bootstrap renders every registered provider from that source; `ways adapter install <provider> [--force]` regenerates one. Rendered files are hashed in the manifest, verified by integrity, and re-rendered by `ways upgrade` after checklist approval.
+`assets/adapters/` is the canonical source: five commands, five roles (explorer, implementer, reviewer, qa, sweeper) with prompts of at most six lines, a statusline script, and a commit guard. The orchestrator is not a subagent: it is the main agent the human talks to, instructed by `AGENTS.md`. Bootstrap renders every registered provider from that source; `ways adapter install <provider> [--force]` regenerates one. Rendered files are hashed in the manifest, verified by integrity, and re-rendered by `ways upgrade` after checklist approval.
 
-The Claude Code adapter produces `.claude/commands/ways-*.md`, read-only-aware `.claude/agents/ways-*.md`, `.claude/ways-statusline.sh`, `.claude/ways-guard.sh`, and merges `statusLine` plus a `PreToolUse` guard into `.claude/settings.json` without touching other keys. The human works through `/ways-quick`, `/ways-plan`, `/ways-sdd`, `/ways-advance`, `/ways-finish`, `/ways-status` and `/ways-query`, or plain language; the CLI stays behind them.
+The Claude Code adapter produces `.claude/commands/ways-*.md`, read-only-aware `.claude/agents/ways-*.md`, `.claude/ways-statusline.sh`, `.claude/ways-guard.sh`, and merges a `PreToolUse` guard into `.claude/settings.json` without touching other keys. An existing statusline is wrapped so the harness status is appended to it. The human works through `/ways-quick`, `/ways-plan`, `/ways-sdd`, `/ways-status` and `/ways-query`, or plain language. Advancing, finishing and cancelling are done by the agent through the CLI when the human asks; they are not user commands.
 
 ## Observable status
 

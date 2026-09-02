@@ -18,7 +18,7 @@ Take latte-ways from a functional MVP to a dogfood-ready harness. Preserve its m
 - SDD phases, auto-commits, explicit repair, task worktrees, and review gates are implemented.
 - OKF v0.2 validation and deterministic catalog, graph, and search indexes are implemented.
 - Bootstrap, managed-file hashes, upgrade checklist, canonical Bash checks, and CI are implemented.
-- Claude Code adapter rendered from `assets/adapters/`: commands, seven role subagents, statusline, PreToolUse commit guard, managed and upgradable.
+- Claude Code adapter rendered from `assets/adapters/`: commands, five role subagents, statusline, PreToolUse commit guard, managed and upgradable.
 - Mechanical enforcement: managed `commit-msg` hook, `ways check --history`, in-work trailer audit, and the derived `.ways/status.json` artifact with `ways status --json`.
 - The repository is clean and the full test suite passes at handoff.
 

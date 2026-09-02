@@ -1,6 +1,6 @@
 ---
-description: Start a versioned plan proposal
+description: Versioned plan proposal that can be executed, promoted to SDD, or abandoned
 argument-hint: <id> [goal]
 ---
 
-Run `npx ways plan start <id>` with the first word of `$ARGUMENTS` as the slug. Fill `.ways/plans/<id>.md` with goal, numbered steps and acceptance, then run `npx ways plan propose`. Ask whether to execute it (/ways-finish), promote it to SDD (`npx ways plan promote`), or abandon it.
+Run `npx ways plan start <id>` with the first word of `$ARGUMENTS` as the slug. Fill `.ways/plans/<id>.md` with goal, numbered steps and acceptance, then run `npx ways plan propose` and ask the human how to proceed. To execute: implement the steps, run `scripts/check.sh`, then `npx ways plan finish --message="<subject>" --memory=<updated|unchanged>`. To promote: `npx ways plan promote [--supervised]` and continue as /ways-sdd. To drop: `npx ways plan abandon`.

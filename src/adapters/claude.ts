@@ -72,18 +72,25 @@ export function hasGuard(settings: Settings): boolean {
   return guardGroups(settings).some((group) => group.hooks?.some((hook) => hook.command === GUARD_COMMAND));
 }
 
+function shellQuote(value: string): string {
+  return `'${value.replaceAll("'", "'\\''")}'`;
+}
+
 /**
- * Adds the guard hook and, unless the user configured their own, the statusline.
+ * Adds the guard hook and the statusline. A statusline the user already has is
+ * wrapped, so the harness status is appended to it instead of replacing it.
  * Every other key is preserved verbatim.
  */
 export function mergeClaudeSettings(settings: Settings): { settings: Settings; notes: string[] } {
   const next: Settings = { ...settings };
   const notes: string[] = [];
   const statusLine = next.statusLine;
-  if (isObject(statusLine) && typeof statusLine.command === "string" && statusLine.command !== STATUSLINE_PATH) {
-    notes.push(`kept existing statusLine (${statusLine.command}); ${STATUSLINE_PATH} is available`);
-  } else {
+  const current = isObject(statusLine) && typeof statusLine.command === "string" ? statusLine.command : undefined;
+  if (current === undefined || current === STATUSLINE_PATH) {
     next.statusLine = { type: "command", command: STATUSLINE_PATH };
+  } else if (!current.startsWith(`${STATUSLINE_PATH} `)) {
+    next.statusLine = { ...(statusLine as Settings), type: "command", command: `${STATUSLINE_PATH} ${shellQuote(current)}` };
+    notes.push(`wrapped existing statusLine (${current}); harness status is appended after it`);
   }
   const hooks: Settings = isObject(next.hooks) ? { ...next.hooks } : {};
   const groups = Array.isArray(hooks.PreToolUse) ? [...(hooks.PreToolUse as HookGroup[])] : [];

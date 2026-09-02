@@ -1,6 +1,6 @@
 ---
-description: Open a quick work for a small direct change
+description: Small direct change under harness rules
 argument-hint: <id> [what to change]
 ---
 
-Run `npx ways status --json`; if work is already active, stop and report it. Otherwise run `npx ways quick start <id>` using the first word of `$ARGUMENTS` as the slug, then implement the rest of the request. Finish with /ways-finish.
+Run `npx ways status --json`; if work is already active, stop and report it. Otherwise run `npx ways quick start <id>` with the first word of `$ARGUMENTS` as the slug and implement the rest of the request. When done, run `scripts/check.sh`, fix anything it reports without bypassing it, then close with `npx ways quick finish --message="<concise subject>" --memory=<updated|unchanged>` (`updated` only if you changed `.ways/knowledge/`) and report the commit. If the human asks to drop the work, run `npx ways quick cancel`.

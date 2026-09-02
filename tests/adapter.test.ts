@@ -13,8 +13,8 @@ import { checkIntegrity } from "../src/integrity/integrity.js";
 import { applyUpgrade, planUpgrade } from "../src/upgrade/upgrade.js";
 import { startSdd } from "../src/work/sdd.js";
 
-const ROLES = ["orchestrator", "explorer", "implementer", "reviewer", "qa-unit", "qa-mutation", "sweeper"];
-const COMMANDS = ["status", "query", "quick", "finish", "cancel", "plan", "sdd", "advance"];
+const ROLES = ["explorer", "implementer", "reviewer", "qa", "sweeper"];
+const COMMANDS = ["status", "query", "quick", "plan", "sdd"];
 
 async function repository(): Promise<{ cwd: string; git: GitRepository }> {
   const cwd = await mkdtemp(join(tmpdir(), "ways-adapter-"));
@@ -34,7 +34,7 @@ describe("canonical adapter source", () => {
     expect(source.roles.map((role) => role.name).sort()).toEqual([...ROLES].sort());
     expect(source.commands.map((command) => command.name).sort()).toEqual([...COMMANDS].sort());
     for (const role of source.roles) expect(nonEmptyLines(role.body).length).toBeLessThanOrEqual(MAX_ROLE_LINES);
-    expect(source.roles.filter((role) => role.access === "read").map((role) => role.name).sort()).toEqual(["explorer", "qa-mutation", "reviewer"]);
+    expect(source.roles.filter((role) => role.access === "read").map((role) => role.name).sort()).toEqual(["explorer", "reviewer"]);
   });
 
   it("rejects prompts longer than six lines", async () => {
@@ -70,11 +70,19 @@ describe("claude renderer", () => {
     expect(groups.flatMap((group) => group.hooks.map((hook) => hook.command))).toEqual(["mine.sh", "\"$CLAUDE_PROJECT_DIR\"/.claude/ways-guard.sh"]);
   });
 
-  it("keeps a user-defined statusline and reports it", () => {
-    const { settings, notes } = mergeClaudeSettings({ statusLine: { type: "command", command: "my-status.sh" } });
-    expect((settings.statusLine as { command: string }).command).toBe("my-status.sh");
-    expect(notes[0]).toMatch(/kept existing statusLine/);
+  it("wraps a user-defined statusline instead of replacing it, idempotently", () => {
+    const { settings, notes } = mergeClaudeSettings({ statusLine: { type: "command", command: "my-status.sh --short" } });
+    expect((settings.statusLine as { command: string }).command).toBe(".claude/ways-statusline.sh 'my-status.sh --short'");
+    expect(notes[0]).toMatch(/wrapped existing statusLine/);
+    expect(mergeClaudeSettings(settings).settings).toEqual(settings);
     expect(hasGuard(settings)).toBe(true);
+  });
+
+  it("appends the harness status after the wrapped statusline output", async () => {
+    const { cwd } = await repository();
+    await bootstrap({ cwd, testCommand: [process.execPath, "-e", "process.exit(0)"] });
+    const out = execFileSync("sh", [join(cwd, ".claude/ways-statusline.sh"), "printf mine"], { cwd, input: JSON.stringify({ workspace: { project_dir: cwd } }), encoding: "utf8" });
+    expect(out).toBe("mine | ways: idle");
   });
 
   it("resolves neutral placeholders and leaves no provider names in the source", async () => {
