@@ -94,8 +94,20 @@ export class GitRepository {
   }
 
   async changedPathsBetween(from: string, to: string): Promise<string[]> {
-    const output = await this.run(["diff", "--name-only", "-z", from, to, "--"]);
+    const output = await this.run(["diff", "--no-renames", "--name-only", "-z", from, to, "--"]);
     return output.split("\0").filter(Boolean).sort();
+  }
+
+  /** Compute Git's proposed merged tree without creating a commit or changing the worktree. */
+  async mergedTree(left: string, right: string): Promise<string> {
+    const output = await this.run(["merge-tree", "--write-tree", left, right]);
+    const tree = output.split("\n", 1)[0] ?? "";
+    if (!/^[a-f0-9]{40,64}$/.test(tree)) throw new GitError(`Unexpected merge-tree result: ${output}`);
+    return tree;
+  }
+
+  async treeId(ref = "HEAD"): Promise<string> {
+    return this.run(["rev-parse", "--verify", `${ref}^{tree}`]);
   }
 
   async treeEntries(ref = "HEAD"): Promise<GitTreeEntry[]> {
@@ -111,6 +123,15 @@ export class GitRepository {
 
   async objectBytes(object: string): Promise<Buffer> {
     return this.runBuffer(["cat-file", "-p", object]);
+  }
+
+  async pathExists(ref: string, path: string): Promise<boolean> {
+    try {
+      await this.run(["cat-file", "-e", `${ref}:${path}`]);
+      return true;
+    } catch {
+      return false;
+    }
   }
 
   async status(): Promise<string[]> {
