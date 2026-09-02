@@ -18,7 +18,8 @@ process.stdin.on("data", (chunk) => { data += chunk; }).on("end", () => {
   const commits = new RegExp("(?:^|[;&|(`\\x22\\x27]\\s*|\\$\\(\\s*)" + prefix + "git\\s+" + option + "commit(?:\\s|$)", "m");
   const evidence = /\.ways\/sdd\/[^\/\s]+\/(approvals|reviews)(\/|$)/;
   const edited = event.tool_input?.file_path ?? event.tool_input?.notebook_path;
-  if ((edits && typeof edited === "string" && evidence.test(edited)) || (!edits && evidence.test(command))) {
+  const writes = /(>|\b(tee|cp|mv|rm|ln|dd|touch|install|rsync|python3?|node|perl|ruby)\b|\bsed\b[^|;&]*\s-[a-zA-Z]*i)/;
+  if ((edits && typeof edited === "string" && evidence.test(edited)) || (!edits && evidence.test(command) && writes.test(command))) {
     process.stderr.write("ways: approvals and review verdicts are written only by `ways approve` and `ways review submit`\n");
     process.exit(2);
   }

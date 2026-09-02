@@ -26,8 +26,7 @@ async function gateState(cwd: string): Promise<WorkState> {
   return state;
 }
 
-/** Writes the approval artifact; callers are responsible for proving a human is present. */
-export async function recordApproval(cwd: string, approvedBy: string): Promise<ApprovalRecord> {
+async function writeApproval(cwd: string, approvedBy: string): Promise<ApprovalRecord> {
   const state = await gateState(cwd);
   if (!approvedBy.trim()) throw new Error("Approver identity is required");
   const record: ApprovalRecord = {
@@ -92,7 +91,7 @@ export async function approveInteractively(cwd: string, terminal: Terminal = pro
   terminal.say(`Read ${SDD_DIR}/${state.id}/${state.phase}.md and the diff since the gate before approving.`);
   const answer = await terminal.ask(`Type "${state.phase}" to approve: `);
   if (answer.trim() !== state.phase) throw new Error("Approval cancelled");
-  return recordApproval(cwd, await approverIdentity(cwd));
+  return writeApproval(cwd, await approverIdentity(cwd));
 }
 
 export async function readApproval(cwd: string, workId: string, phase: string): Promise<ApprovalRecord | undefined> {

@@ -37,7 +37,7 @@ Take latte-ways from a functional MVP to a dogfood-ready harness. Preserve its m
 
 ## Priority 3: authentic approvals (done)
 
-- `ways approve` is the only writer of `.ways/sdd/<id>/approvals/<phase>.json`; it needs a TTY on stdin and stdout and a typed confirmation, and binds the artifact to work, phase, gate commit and the digest of the working diff (`src/work/approve.ts`, `src/work/digest.ts`).
+- `ways approve` is the only harness writer of `.ways/sdd/<id>/approvals/<phase>.json`; it needs a TTY on stdin and stdout and a typed confirmation, and binds the artifact to work, phase, gate commit and the digest of the working diff (`src/work/approve.ts`, `src/work/digest.ts`). Supervised work is opened with a traced commit so the profile is fixed in Git; the close approval is committed on its own before the closing commit deletes it.
 - Reviews carry the digest from `ways review digest`; submit and the review gate both recompute it.
 - The commit-msg hook refuses certifications of supervised human gates without a bound approval; the Claude guard blocks tool writes under `approvals/` and `reviews/`.
 - Remaining: a remote or signed approval channel for humans without a local terminal.
@@ -59,7 +59,7 @@ Take latte-ways from a functional MVP to a dogfood-ready harness. Preserve its m
 
 ## Known limitations
 
-- Approvals and review verdicts are plain files: the TTY barrier, the digest binding, the hook and the guard stop an agent from approving through its tools, but a Bash heredoc can still write the artifact. Only the digest and gate binding are verified afterwards, not who wrote the file.
+- Approvals and review verdicts are plain files: the TTY barrier, the digest binding, the hook and the guard stop an agent from approving through its tools or the CLI, but a shell script (a heredoc, `node -e` importing `dist/`, or `script` to fake a pty) can still fabricate the artifact. Only the binding is verified afterwards, not who wrote the file; the guard only intercepts obviously write-shaped commands naming those paths.
 - Hooks can be bypassed with `--no-verify` or a relocated `WAYS_CLI`; `ways check --history` in CI is the backstop.
 - In delegated SDD the Claude guard blocks the four edit tools in the main worktree; Bash-driven writes are not intercepted and a hand-made `.ways/runtime/task.json` silences it. The implement gate, which only accepts commit hashes recorded by `task integrate`, is the mechanical backstop.
 - The Claude PreToolUse guard only recognises `git commit` invocations (including `command`/`exec` prefixes, absolute paths, subshells and `sh -c` strings); cherry-pick, merge, rebase or `gh pr merge` are not intercepted. It fails closed when `node` is missing from the hook PATH. The managed `commit-msg` hook and `check --history` remain the mechanical backstop.
@@ -74,7 +74,7 @@ Take latte-ways from a functional MVP to a dogfood-ready harness. Preserve its m
 ## Definition of dogfood-ready
 
 - Every mutation boundary has tested crash recovery.
-- A supervised gate cannot be approved by the acting implementation agent (done: TTY barrier and bound artifact).
+- A supervised gate cannot be approved by the acting implementation agent through its tools or the CLI (done: TTY barrier, bound artifact, profile fixed in Git; authorship of a hand-written file remains unverifiable locally).
 - Reviewer evidence is bound to the exact diff and cannot modify it unnoticed (done: review digest).
 - Failed integration produces a recoverable state with no mixed commit.
 - Bootstrap and upgrade are tested from a packed npm consumer project.

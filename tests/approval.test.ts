@@ -7,8 +7,10 @@ import { describe, expect, it } from "vitest";
 import { bootstrap } from "../src/bootstrap/bootstrap.js";
 import { GitRepository } from "../src/git/git.js";
 import { judgeCommitMessage } from "../src/hooks/hook.js";
+import { auditCommits, checkHistory } from "../src/integrity/history.js";
+import { promotePlan, proposePlan, startPlan } from "../src/work/plan.js";
 import { loadState } from "../src/state/store.js";
-import { approveInteractively, approvalPath, recordApproval, type Terminal } from "../src/work/approve.js";
+import { approveInteractively, approvalPath, type Terminal } from "../src/work/approve.js";
 import { reviewDigest, submitReview } from "../src/work/review.js";
 import { advanceSdd, startSdd } from "../src/work/sdd.js";
 
@@ -37,6 +39,10 @@ function terminal(interactive: boolean, answer: string): Terminal {
   return { interactive, ask: async () => answer, say: () => undefined };
 }
 
+async function approve(cwd: string, phase: string): Promise<void> {
+  await approveInteractively(cwd, terminal(true, phase));
+}
+
 describe("human approvals", () => {
   it("blocks a supervised gate until a human approves in a terminal", async () => {
     const { cwd } = await repository();
@@ -63,13 +69,13 @@ describe("human approvals", () => {
     const { cwd } = await repository();
     await startSdd(cwd, "sup", "supervised");
     await fill(cwd, "sup", "intake");
-    await recordApproval(cwd, "human");
+    await approve(cwd, "intake");
     await writeFile(join(cwd, ".ways/sdd/sup/intake.md"), "# intake\n\nGoal: changed\nEvidence: after approval\n");
     await expect(advanceSdd(cwd)).rejects.toThrow(/content changed after approval/);
     await fill(cwd, "sup", "intake");
     await advanceSdd(cwd);
     await fill(cwd, "sup", "explore");
-    await expect(recordApproval(cwd, "human")).rejects.toThrow(/does not require human approval/);
+    await expect(approve(cwd, "explore")).rejects.toThrow(/does not require human approval/);
     await advanceSdd(cwd);
     for (const phase of ["assess", "specify"]) {
       await fill(cwd, "sup", phase);
@@ -80,6 +86,80 @@ describe("human approvals", () => {
     await writeFile(join(cwd, approvalPath("sup", "plan")), JSON.stringify({ ...stale, phase: "plan" }));
     await fill(cwd, "sup", "plan");
     await expect(advanceSdd(cwd)).rejects.toThrow(/another gate commit/);
+  });
+
+  it("runs a supervised work end to end through the hook, approving intake, plan and close", async () => {
+    const { cwd, git } = await repository();
+    await startSdd(cwd, "sup", "supervised");
+    expect((await git.lastCommit()).trailers).toMatchObject({ work: "sup", state: "opened" });
+    for (const phase of ["intake", "explore", "assess", "specify", "plan", "decompose", "implement"]) {
+      await fill(cwd, "sup", phase);
+      if (phase === "implement") await writeFile(join(cwd, "feature.ts"), "export const a = 1;\n");
+      if (phase === "intake" || phase === "plan") await approve(cwd, phase);
+      await advanceSdd(cwd);
+    }
+    await fill(cwd, "sup", "review");
+    await mkdir(join(cwd, ".ways/runtime"), { recursive: true });
+    const path = join(cwd, ".ways/runtime/review.json");
+    await writeFile(path, JSON.stringify({ schemaVersion: 1, workId: "sup", reviewer: "ways-reviewer", digest: await reviewDigest(cwd), verdict: "pass", findings: [] }));
+    await submitReview(cwd, path);
+    await advanceSdd(cwd);
+    for (const phase of ["validate", "reconcile-memory", "close"]) {
+      await fill(cwd, "sup", phase);
+      if (phase === "close") {
+        await expect(advanceSdd(cwd)).rejects.toThrow(/requires explicit human approval/);
+        await approve(cwd, phase);
+      }
+      await advanceSdd(cwd);
+    }
+    expect(await loadState(cwd)).toBeUndefined();
+    expect(await git.status()).toEqual([]);
+    const log = await git.run(["log", "--format=%s"]);
+    expect(log).toContain("sdd(close): record approval of sup");
+    expect(log.split("\n")[0]).toBe("sdd(close): complete sup");
+  });
+
+  it("rejects flipping the profile on disk to dodge a human gate", async () => {
+    const { cwd } = await repository();
+    await startSdd(cwd, "sup", "supervised");
+    await fill(cwd, "sup", "intake");
+    const state = (await loadState(cwd))!;
+    state.profile = "autonomous";
+    await writeFile(join(cwd, ".ways/state/current.json"), JSON.stringify(state));
+    await expect(advanceSdd(cwd)).rejects.toThrow(/profile changed outside a gate/);
+    const forged = "sdd(intake): complete sup\n\nHarness-Work: sup\nHarness-Phase: intake\nHarness-State: completed\n";
+    expect((await judgeCommitMessage(cwd, forged)).reason).toMatch(/profile changed outside a gate/);
+  });
+
+  it("rejects renaming the work on disk to shed the committed profile", async () => {
+    const { cwd } = await repository();
+    await startSdd(cwd, "sup", "supervised");
+    const state = (await loadState(cwd))!;
+    const head = await new GitRepository(cwd).head();
+    const renamed = { ...state, id: "sup2", profile: "autonomous", baseCommit: head, gateCommit: head };
+    await writeFile(join(cwd, ".ways/state/current.json"), JSON.stringify(renamed));
+    await mkdir(join(cwd, ".ways/sdd/sup2"), { recursive: true });
+    await fill(cwd, "sup2", "intake");
+    await expect(advanceSdd(cwd)).rejects.toThrow(/rewritten outside a gate/);
+    const forged = "sdd(intake): complete sup2\n\nHarness-Work: sup2\nHarness-Phase: intake\nHarness-State: completed\n";
+    expect((await judgeCommitMessage(cwd, forged)).reason).toMatch(/rewritten outside a gate/);
+    expect(auditCommits([{ hash: "a".repeat(40), subject: "open", body: "", trailers: { work: "sup", phase: "intake", state: "opened" } }], "sup2")).toMatchObject([{ code: "history-abandoned-opening" }]);
+    expect(auditCommits([{ hash: "a".repeat(40), subject: "open", body: "", trailers: { work: "sup", phase: "intake", state: "opened" } }], "sup")).toEqual([]);
+  });
+
+  it("opens a supervised work promoted from a plan with a traced commit", async () => {
+    const { cwd, git } = await repository();
+    const plan = await startPlan(cwd, "promo");
+    await writeFile(join(cwd, plan.planPath!), (await readFile(join(cwd, plan.planPath!), "utf8")).replace("1. ", "1. Do it"));
+    await proposePlan(cwd);
+    await promotePlan(cwd, "supervised");
+    expect((await git.lastCommit()).trailers).toMatchObject({ work: "promo", state: "opened" });
+    await fill(cwd, "promo", "intake");
+    await expect(advanceSdd(cwd)).rejects.toThrow(/requires explicit human approval/);
+    await approve(cwd, "intake");
+    await advanceSdd(cwd);
+    expect((await loadState(cwd))?.phase).toBe("explore");
+    expect(await checkHistory(cwd)).toEqual([]);
   });
 
   it("commit-msg hook rejects a forged human-gate certification", async () => {

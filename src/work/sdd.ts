@@ -2,13 +2,14 @@ import { mkdir, readFile, rm } from "node:fs/promises";
 import { join } from "node:path";
 import { HARNESS_VERSION } from "../index.js";
 import { runChecks } from "../check/check.js";
-import { PLAN_DIR, SDD_DIR } from "../domain/constants.js";
+import { PLAN_DIR, SDD_DIR, STATE_PATH } from "../domain/constants.js";
 import { SDD_PHASES, type ApprovalProfile, type ExecutionMode, type SddPhase, type WorkState } from "../domain/types.js";
+import { validateState } from "../domain/validation.js";
 import { writeAtomic } from "../fs/files.js";
 import { GitRepository } from "../git/git.js";
 import { commitsAfter } from "../integrity/history.js";
 import { loadState, removeState, saveState } from "../state/store.js";
-import { assertApproved, requiresApproval } from "./approve.js";
+import { approvalPath, assertApproved, requiresApproval } from "./approve.js";
 import { assertReviewPassed } from "./review.js";
 
 function phasePath(state: WorkState, phase: SddPhase): string {
@@ -32,11 +33,23 @@ async function assertPhaseFilled(cwd: string, state: WorkState): Promise<void> {
   if (values.length < 2) throw new Error(`Phase ${state.phase} lacks evidence and a gate decision`);
 }
 
+/** Supervised work is opened with a traced commit so its profile is fixed in Git and cannot be flipped on disk. */
+export async function isOpeningCommit(git: GitRepository, state: WorkState, hash: string): Promise<boolean> {
+  const commit = await git.commitInfo(hash);
+  return commit.trailers.work === state.id && commit.trailers.state === "opened" && await git.parent(hash) === state.baseCommit;
+}
+
+export async function openSupervised(cwd: string, state: WorkState): Promise<void> {
+  const git = new GitRepository(cwd);
+  await git.commit(await git.changedPaths(), `sdd(intake): open ${state.id} supervised`, { work: state.id, phase: "intake", state: "opened" });
+}
+
 export async function assertSddConsistency(cwd: string, state: WorkState): Promise<void> {
   const git = new GitRepository(cwd);
   const head = await git.head();
+  await assertProfileCommitted(git, state);
   if (!state.lastCompletedPhase) {
-    if (head !== state.baseCommit) throw new Error("SDD state diverged before its first gate; run ways repair");
+    if (head !== state.baseCommit && !await isOpeningCommit(git, state, head)) throw new Error("SDD state diverged before its first gate; run ways repair");
     return;
   }
   const commit = await git.findCertification(state.id, state.lastCompletedPhase);
@@ -59,6 +72,30 @@ async function assertDelegatedImplementation(cwd: string, state: WorkState): Pro
     if (certification || integrated.has(commit.hash)) continue;
     throw new Error(`Commit ${commit.hash.slice(0, 12)} "${commit.subject}" was not integrated from a task; the orchestrator must not implement in delegated execution`);
   }
+}
+
+export async function committedState(git: GitRepository): Promise<WorkState | undefined> {
+  try {
+    const value: unknown = JSON.parse(await git.run(["show", `HEAD:${STATE_PATH}`]));
+    return validateState(value) ? value : undefined;
+  } catch {
+    return undefined;
+  }
+}
+
+/** The state committed at HEAD is the source of truth for identity and profile; the disk copy may only move through gates. */
+export function committedMismatch(committed: WorkState | undefined, state: WorkState): string | undefined {
+  if (committed && committed.mode === "sdd") {
+    if (committed.id !== state.id || committed.baseCommit !== state.baseCommit) return `HEAD records SDD work ${committed.id}; the state on disk was rewritten outside a gate`;
+    if (state.mode === "sdd" && committed.profile !== state.profile) return "SDD profile changed outside a gate";
+  }
+  if (state.mode === "sdd" && state.profile === "supervised" && !committed) return "Supervised work must be opened with a traced commit";
+  return undefined;
+}
+
+async function assertProfileCommitted(git: GitRepository, state: WorkState): Promise<void> {
+  const failure = committedMismatch(await committedState(git), state);
+  if (failure) throw new Error(`${failure}; run ways repair`);
 }
 
 export async function startSdd(cwd: string, id: string, profile: ApprovalProfile, execution: ExecutionMode = "inline"): Promise<WorkState> {
@@ -85,6 +122,7 @@ export async function startSdd(cwd: string, id: string, profile: ApprovalProfile
   };
   await createPhaseFile(cwd, state, "intake");
   await saveState(cwd, state);
+  if (profile === "supervised") await openSupervised(cwd, state);
   return state;
 }
 
@@ -111,6 +149,10 @@ export async function advanceSdd(cwd: string): Promise<string> {
   const next = SDD_PHASES[index + 1];
 
   if (!next) {
+    if (requiresApproval(state)) {
+      // The closing commit removes the SDD folder, so the close approval is committed first and its deletion is what the hook verifies.
+      await git.commit([approvalPath(state.id, "close")], `sdd(close): record approval of ${state.id}`, { work: state.id, phase: "close", state: "approved" });
+    }
     for (const task of state.tasks) {
       if (task.worktree) {
         try {

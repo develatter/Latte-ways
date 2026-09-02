@@ -5,6 +5,7 @@ import { validateState } from "../domain/validation.js";
 import { GitRepository, parseTrailers } from "../git/git.js";
 import { loadState } from "../state/store.js";
 import { approvalBinds, approvalPath, requiresApproval } from "../work/approve.js";
+import { committedMismatch } from "../work/sdd.js";
 import { validateApproval } from "../domain/validation.js";
 
 export interface HookVerdict {
@@ -29,7 +30,7 @@ async function stagesStateDeletion(git: GitRepository): Promise<boolean> {
 }
 
 /** A certification of a supervised human gate must carry a matching approval artifact in the same commit. */
-async function stagedApprovalFailure(git: GitRepository, work: WorkState, phase: string): Promise<string | undefined> {
+async function stagedApprovalFailure(git: GitRepository, work: WorkState, committed: WorkState | undefined, phase: string): Promise<string | undefined> {
   const path = approvalPath(work.id, phase);
   let value: unknown;
   try {
@@ -38,8 +39,8 @@ async function stagedApprovalFailure(git: GitRepository, work: WorkState, phase:
     return `certification of human gate ${phase} must stage a human approval at ${path}`;
   }
   if (!validateApproval(value)) return `staged approval at ${path} is invalid`;
-  const gateCommit = await git.head();
-  return approvalBinds(value, { workId: work.id, phase, gateCommit });
+  // The approval was written against the gate recorded by the state committed at HEAD.
+  return approvalBinds(value, { workId: work.id, phase, gateCommit: committed?.gateCommit ?? await git.head() });
 }
 
 /** The close gate removes the SDD folder, so its approval must be present at HEAD's working tree and staged for deletion. */
@@ -54,7 +55,7 @@ async function deletedApprovalFailure(git: GitRepository, work: WorkState): Prom
     return `approval at ${path} is not committed at HEAD`;
   }
   if (!validateApproval(value)) return `approval at ${path} is invalid`;
-  return approvalBinds(value, { workId: work.id, phase: "close", gateCommit: await git.parent("HEAD") });
+  return approvalBinds(value, { workId: work.id, phase: "close", gateCommit: work.gateCommit });
 }
 
 async function headHasManifest(git: GitRepository): Promise<boolean> {
@@ -73,10 +74,14 @@ export async function judgeCommitMessage(cwd: string, message: string): Promise<
   const active = await loadState(cwd);
   if (active) {
     if (trailers.work === active.id) {
+      const committed = await headState(git);
+      const opening = trailers.state === "opened" && !committed;
+      const mismatch = opening ? undefined : committedMismatch(committed, active);
+      if (mismatch) return { accepted: false, reason: `${mismatch}; run ways repair` };
       const certified = active.lastCompletedPhase;
       const certifying = trailers.state === "completed" && certified !== undefined && trailers.phase === certified;
       if (certifying && requiresApproval({ ...active, phase: certified })) {
-        const failure = await stagedApprovalFailure(git, active, trailers.phase!);
+        const failure = await stagedApprovalFailure(git, active, committed, trailers.phase!);
         if (failure) return { accepted: false, reason: `Human gate ${trailers.phase} of ${active.id}: ${failure}` };
       }
       return { accepted: true, reason: `Commit traced to active ${active.mode} work ${active.id}` };

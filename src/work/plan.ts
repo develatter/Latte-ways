@@ -8,6 +8,7 @@ import { writeAtomic } from "../fs/files.js";
 import { GitRepository } from "../git/git.js";
 import { loadState, saveState } from "../state/store.js";
 import { closeWork } from "./close.js";
+import { openSupervised } from "./sdd.js";
 
 function planTemplate(id: string): string {
   return `---\ntype: plan\nstatus: proposed\nwork: ${id}\n---\n\n# Goal\n\n# Plan\n\n1. \n\n# Acceptance\n`;
@@ -86,6 +87,7 @@ export async function promotePlan(cwd: string, profile: ApprovalProfile, executi
   state.updatedAt = new Date().toISOString();
   delete state.planPath;
   await saveState(cwd, state);
+  if (profile === "supervised") await openSupervised(cwd, state);
   return state;
 }
 

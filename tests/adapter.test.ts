@@ -157,6 +157,9 @@ describe("adapter installation", () => {
     expect(run(".claude/ways-guard.sh", { tool_input: { command: "git log" }, cwd }).code).toBe(0);
     expect(run(".claude/ways-guard.sh", { tool_name: "Write", tool_input: { file_path: ".ways/sdd/x/approvals/plan.json" }, cwd }).code).toBe(2);
     expect(run(".claude/ways-guard.sh", { tool_name: "Bash", tool_input: { command: "cat > .ways/sdd/x/reviews/latest.json" }, cwd }).code).toBe(2);
+    expect(run(".claude/ways-guard.sh", { tool_name: "Bash", tool_input: { command: "cp a.json .ways/sdd/x/approvals/plan.json" }, cwd }).code).toBe(2);
+    expect(run(".claude/ways-guard.sh", { tool_name: "Bash", tool_input: { command: "cat .ways/sdd/x/approvals/plan.json" }, cwd }).code).toBe(0);
+    expect(run(".claude/ways-guard.sh", { tool_name: "Bash", tool_input: { command: "git show HEAD:.ways/sdd/x/reviews/latest.json" }, cwd }).code).toBe(0);
     expect(run(".claude/ways-guard.sh", { tool_input: { command: "git status", description: "check before git commit" }, cwd }).code).toBe(0);
     expect(run(".claude/ways-guard.sh", { tool_input: { command: "git log --grep commit" }, cwd }).code).toBe(0);
     expect(run(".claude/ways-guard.sh", { tool_input: { command: "echo git commit" }, cwd }).code).toBe(0);

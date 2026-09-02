@@ -10,6 +10,7 @@ import { GitRepository } from "../git/git.js";
 import { providerById } from "../adapters/install.js";
 import { readStatus, statusMatches } from "../state/status.js";
 import { commitsAfter } from "./history.js";
+import { isOpeningCommit } from "../work/sdd.js";
 
 export interface IntegrityIssue {
   code: string;
@@ -104,6 +105,8 @@ export async function checkIntegrity(cwd: string): Promise<IntegrityIssue[]> {
         if (!certification || !await git.isAncestor(certification.hash, head) || await git.parent(certification.hash) !== activeState.gateCommit) {
           issues.push({ code: "state-git-divergence", path: STATE_PATH, message: "SDD state does not match certified Git history" });
         }
+      } else if (activeState.mode === "sdd" && await isOpeningCommit(git, activeState, head)) {
+        // Supervised work opened with its traced commit.
       } else if (activeState.mode === "sdd" || activeState.mode === "quick") {
         if (head !== activeState.baseCommit) issues.push({ code: "state-git-divergence", path: STATE_PATH, message: "Work HEAD changed outside a gate" });
       } else if (activeState.mode === "plan" && head !== activeState.baseCommit) {
