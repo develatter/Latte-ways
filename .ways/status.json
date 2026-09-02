@@ -4,9 +4,9 @@
   "mode": "sdd",
   "id": "living-memory",
   "status": "active",
-  "gateCommit": "21b6f32bbd65759e3c0ad4bdf12d99860dde2223",
-  "updatedAt": "2026-09-02T22:46:19.655Z",
-  "phase": "assess",
+  "gateCommit": "630f43d0f781b41a56edb25ac4547f436428f218",
+  "updatedAt": "2026-09-02T22:46:29.725Z",
+  "phase": "specify",
   "humanGate": false,
   "profile": "autonomous",
   "execution": "delegated"
