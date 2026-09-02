@@ -19,3 +19,5 @@ Compliance never depends on an agent obeying its prompt. Three layers make it me
 - `.ways/status.json` is a derived projection of the active state, verified by integrity and readable by any agent statusline.
 
 Flexible means choosing the ceremony (`quick`, `plan`, `sdd`), never skipping it. Every change opens `quick` at minimum.
+
+SDD runs inline or delegated. In delegated execution the main session is the orchestrator and never edits code: the implement gate only accepts commit hashes recorded by `task integrate`, so trailers alone prove nothing. Implementer, reviewer and qa are separate subagents with opposed objectives; the reviewer assumes the change is wrong until proven otherwise.
