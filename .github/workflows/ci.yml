@@ -18,3 +18,29 @@ jobs:
       - run: npm ci
       - run: npm run build
       - run: scripts/check.sh
+
+  publish:
+    if: github.event_name == 'push' && github.ref == 'refs/heads/master'
+    needs: check
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          registry-url: https://npm.pkg.github.com
+          scope: '@develatter'
+      - run: npm ci
+      - name: Publish if version is new
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          version=$(node -p "require('./package.json').version")
+          if npm view "@develatter/latte-ways@${version}" version --registry=https://npm.pkg.github.com >/dev/null 2>&1; then
+            echo "@develatter/latte-ways@${version} already exists; skipping publish."
+          else
+            npm publish --registry=https://npm.pkg.github.com
+          fi

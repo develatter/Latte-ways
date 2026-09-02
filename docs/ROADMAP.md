@@ -1,6 +1,6 @@
 # Roadmap
 
-This roadmap defines the next milestones for latte-ways. It is the source of planned work; `README.md` remains a product overview and `docs/HANDOFF.md` records the current baseline and operational caveats.
+This roadmap defines the next milestones for latte-ways. It is the source of planned work; `README.md` remains a product overview.
 
 ## 1. Transactional safety
 
