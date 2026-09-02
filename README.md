@@ -88,6 +88,12 @@ Compliance does not depend on the agent obeying its prompt:
 - `ways check --history [--since=<ref>]` audits every first-parent commit after the anchor (`--since`, `historySince` in config, or the commit that introduced `.ways/manifest.json`) for trailers and unbroken SDD certification chains. `scripts/check.sh` runs it, so a `--no-verify` bypass still fails in CI.
 - With an active work, integrity also fails on any commit after its base that lacks the work trailer.
 
+## Provider adapters
+
+`assets/adapters/` is the canonical source: eight commands, seven roles (orchestrator, explorer, implementer, reviewer, qa-unit, qa-mutation, sweeper) with prompts of at most six lines, a statusline script, and a commit guard. Bootstrap renders every registered provider from that source; `ways adapter install <provider> [--force]` regenerates one. Rendered files are hashed in the manifest, verified by integrity, and re-rendered by `ways upgrade` after checklist approval.
+
+The Claude Code adapter produces `.claude/commands/ways-*.md`, read-only-aware `.claude/agents/ways-*.md`, `.claude/ways-statusline.sh`, `.claude/ways-guard.sh`, and merges `statusLine` plus a `PreToolUse` guard into `.claude/settings.json` without touching other keys. The human works through `/ways-quick`, `/ways-plan`, `/ways-sdd`, `/ways-advance`, `/ways-finish`, `/ways-status` and `/ways-query`, or plain language; the CLI stays behind them.
+
 ## Observable status
 
 `.ways/status.json` is a tracked, derived projection of the active state: `active`, `mode`, `id`, `status`, `phase`, `profile`, `humanGate`, `gateCommit`, `updatedAt`. It is rewritten on every transition, verified by integrity, and cheap to read from any agent statusline. `ways status --json` prints the same object.

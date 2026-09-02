@@ -12,6 +12,13 @@
       "type": "object",
       "minProperties": 1,
       "additionalProperties": { "type": "string", "pattern": "^[a-f0-9]{64}$" }
+    },
+    "adapters": {
+      "type": "object",
+      "additionalProperties": {
+        "type": "object",
+        "additionalProperties": { "type": "string", "pattern": "^[a-f0-9]{64}$" }
+      }
     }
   }
 }

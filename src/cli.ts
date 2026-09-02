@@ -2,6 +2,7 @@
 
 import { realpathSync } from "node:fs";
 import { pathToFileURL } from "node:url";
+import { installAdapter, PROVIDERS } from "./adapters/install.js";
 import { bootstrap } from "./bootstrap/bootstrap.js";
 import { runChecks } from "./check/check.js";
 import { runCommitMsgHook } from "./hooks/hook.js";
@@ -138,6 +139,20 @@ export async function run(argv: readonly string[], cwd = process.cwd()): Promise
     throw new Error("Usage: ways sdd start <id> [--supervised] | advance [--approved] | downgrade <quick|plan>");
   }
 
+  if (command === "adapter") {
+    const [action, provider] = args;
+    if (action === "list") {
+      for (const adapter of PROVIDERS) console.log(adapter.id);
+      return 0;
+    }
+    if (action === "install" && provider) {
+      const result = await installAdapter(cwd, provider, args.includes("--force"));
+      console.log(`Adapter ${result.provider} installed: ${result.files.length} files${result.merged.length ? `, merged ${result.merged.join(", ")}` : ""}.`);
+      return 0;
+    }
+    throw new Error("Usage: ways adapter list | install <provider> [--force]");
+  }
+
   if (command === "check") {
     if (args.includes("--history")) {
       const since = args.find((arg) => arg.startsWith("--since="))?.slice(8);
@@ -235,7 +250,7 @@ export async function run(argv: readonly string[], cwd = process.cwd()): Promise
     if (!Array.isArray(testCommand) || !testCommand.every((part) => typeof part === "string")) {
       throw new Error("--test-command must be a JSON string array");
     }
-    await bootstrap({ cwd, testCommand, force });
+    await bootstrap({ cwd, testCommand, force, adapters: !args.includes("--no-adapters") });
     console.log("Harness bootstrapped.");
     return 0;
   }

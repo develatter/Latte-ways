@@ -1,0 +1,37 @@
+export interface CommandSource {
+  name: string;
+  description: string;
+  usage?: string;
+  body: string;
+}
+
+export interface RoleSource {
+  name: string;
+  description: string;
+  access: "read" | "write";
+  body: string;
+}
+
+export interface AdapterSource {
+  commands: CommandSource[];
+  roles: RoleSource[];
+  statusline: string;
+  guard: string;
+}
+
+export interface RenderedFile {
+  path: string;
+  content: string;
+  mode?: number;
+}
+
+/**
+ * A provider adapter turns the canonical source into provider-specific files.
+ * `render` returns files that the harness owns entirely and hashes.
+ * `merge` may adjust files shared with the user (settings) and must be idempotent.
+ */
+export interface ProviderAdapter {
+  id: string;
+  render(source: AdapterSource): RenderedFile[];
+  merge?(cwd: string): Promise<string[]>;
+}

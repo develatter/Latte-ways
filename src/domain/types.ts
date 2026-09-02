@@ -62,6 +62,7 @@ export interface ManagedManifest {
   harnessVersion: string;
   generatedAt: string;
   managedFiles: Record<string, string>;
+  adapters?: Record<string, Record<string, string>>;
 }
 
 export interface ReviewFinding {

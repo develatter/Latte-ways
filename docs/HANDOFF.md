@@ -18,6 +18,7 @@ Take latte-ways from a functional MVP to a dogfood-ready harness. Preserve its m
 - SDD phases, auto-commits, explicit repair, task worktrees, and review gates are implemented.
 - OKF v0.2 validation and deterministic catalog, graph, and search indexes are implemented.
 - Bootstrap, managed-file hashes, upgrade checklist, canonical Bash checks, and CI are implemented.
+- Claude Code adapter rendered from `assets/adapters/`: commands, seven role subagents, statusline, PreToolUse commit guard, managed and upgradable.
 - Mechanical enforcement: managed `commit-msg` hook, `ways check --history`, in-work trailer audit, and the derived `.ways/status.json` artifact with `ways status --json`.
 - The repository is clean and the full test suite passes at handoff.
 
@@ -28,12 +29,11 @@ Take latte-ways from a functional MVP to a dogfood-ready harness. Preserve its m
 - Define conflict states and recovery for failed cherry-picks and partial worktree cleanup.
 - Never silently infer progress or discard project changes.
 
-## Priority 2: provider adapters
+## Priority 2: remaining provider adapters
 
-- Render slash commands, role subagents (orchestrator, explorer, implementer, reviewer, qa-unit, qa-mutation, sweeper), minimal skills, and a statusline reader from one neutral source in `assets/` into Claude, Codex, Pi, and Cursor formats via `ways adapter install <provider>`.
-- Adapters are managed files: hashed, upgradable, verified by integrity.
-- The human operates through natural language or generated slash commands; the CLI stays transparent.
-- Keep every role prompt at six non-empty lines or fewer.
+- Claude Code is implemented in `src/adapters/claude.ts` from the canonical source in `assets/adapters/`. Add Codex, Pi, and Cursor as further `ProviderAdapter` entries in `src/adapters/install.ts`; bootstrap already renders every registered provider.
+- Keep adapters as pure renderers plus an idempotent `merge` for shared settings files.
+- Keep every role prompt at six non-empty lines or fewer; the loader rejects longer prompts.
 
 ## Priority 3: authentic approvals
 

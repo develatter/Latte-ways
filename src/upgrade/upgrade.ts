@@ -1,5 +1,6 @@
 import { chmod, readFile } from "node:fs/promises";
 import { join } from "node:path";
+import { installAdapter } from "../adapters/install.js";
 import { assetPath, installHooks, MANAGED_ASSETS } from "../bootstrap/bootstrap.js";
 import { GitRepository } from "../git/git.js";
 import { loadConfig } from "../config/config.js";
@@ -25,7 +26,9 @@ async function manifest(cwd: string): Promise<ManagedManifest> {
 export async function planUpgrade(cwd: string): Promise<UpgradePlan> {
   const installed = await manifest(cwd);
   const modified: string[] = [];
-  for (const [path, expected] of Object.entries(installed.managedFiles)) {
+  const tracked = Object.entries(installed.managedFiles);
+  for (const files of Object.values(installed.adapters ?? {})) tracked.push(...Object.entries(files));
+  for (const [path, expected] of tracked) {
     try {
       if (sha256(await readFile(join(cwd, path))) !== expected) modified.push(path);
     } catch {
@@ -52,13 +55,16 @@ export async function applyUpgrade(cwd: string, overwrite: Set<string>): Promise
     if (mode !== undefined) await chmod(join(cwd, target), mode);
     managedFiles[target] = sha256(content);
   }
+  const installed = await manifest(cwd);
   const next: ManagedManifest = {
     schemaVersion: 1,
     harnessVersion: HARNESS_VERSION,
     generatedAt: new Date().toISOString(),
     managedFiles,
+    ...(installed.adapters ? { adapters: installed.adapters } : {}),
   };
   await writeAtomic(join(cwd, MANIFEST_PATH), stableJson(next));
+  for (const provider of Object.keys(installed.adapters ?? {})) await installAdapter(cwd, provider, true);
   await installHooks(new GitRepository(cwd));
   return plan;
 }

@@ -6,12 +6,14 @@ import { CONFIG_PATH, HOOKS_DIR, INDEX_DIR, KNOWLEDGE_DIR, MANIFEST_PATH, PLAN_D
 import type { HarnessConfig, ManagedManifest } from "../domain/types.js";
 import { sha256, stableJson, writeAtomic } from "../fs/files.js";
 import { GitRepository } from "../git/git.js";
+import { installAllAdapters } from "../adapters/install.js";
 import { writeStatus } from "../state/status.js";
 
 export interface BootstrapOptions {
   cwd: string;
   testCommand: string[];
   force?: boolean;
+  adapters?: boolean;
 }
 
 export const MANAGED_ASSETS: Array<[string, string, number?]> = [
@@ -106,6 +108,10 @@ export async function bootstrap(options: BootstrapOptions): Promise<ManagedManif
   await writeAtomic(join(root, `${INDEX_DIR}/graph.json`), stableJson({ schemaVersion: 1, edges: [] }));
   await writeAtomic(join(root, `${INDEX_DIR}/search.json`), stableJson({ schemaVersion: 1, terms: {} }));
 
+  if (options.adapters ?? true) {
+    await installAllAdapters(root, force);
+    return JSON.parse(await readFile(join(root, MANIFEST_PATH), "utf8")) as ManagedManifest;
+  }
   return manifest;
 }
 

@@ -51,13 +51,18 @@ export async function checkIntegrity(cwd: string): Promise<IntegrityIssue[]> {
   }
 
   if (manifest) {
-    for (const [relative, expected] of Object.entries(manifest.managedFiles)) {
+    const expectations: Array<[string, string, string]> = Object.entries(manifest.managedFiles).map(([path, hash]) => [path, hash, "managed-file"]);
+    for (const files of Object.values(manifest.adapters ?? {})) {
+      for (const [path, hash] of Object.entries(files)) expectations.push([path, hash, "adapter-file"]);
+    }
+    for (const [relative, expected, kind] of expectations) {
       const path = join(cwd, relative);
+      const label = kind === "adapter-file" ? "Adapter" : "Managed";
       try {
         const actual = sha256(await readFile(path));
-        if (actual !== expected) issues.push({ code: "managed-file-modified", path: relative, message: "Managed file hash differs from the manifest" });
+        if (actual !== expected) issues.push({ code: `${kind}-modified`, path: relative, message: `${label} file hash differs from the manifest` });
       } catch {
-        issues.push({ code: "managed-file-missing", path: relative, message: "Managed file is missing" });
+        issues.push({ code: `${kind}-missing`, path: relative, message: `${label} file is missing` });
       }
     }
   }

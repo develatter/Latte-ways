@@ -12,3 +12,5 @@
 10. `scripts/check.sh` is the canonical local and CI entrypoint.
 11. A commit outside an active work is rejected by the managed hook and, if bypassed, by `ways check --history`.
 12. `.ways/status.json` always mirrors `current.json`; a stale artifact fails integrity.
+13. Bootstrap renders every registered provider adapter from `assets/adapters/`; tampering with a rendered file fails integrity.
+14. No role prompt exceeds six non-empty lines; loading the canonical source enforces it.
