@@ -1,6 +1,6 @@
 # explore
 
-Goal:
-Evidence:
-Decision:
-Gate:
+Goal: Establish what each provider supports today, from official documentation fetched 2026-09-02.
+Evidence: Codex (learn.chatgpt.com/docs): no project prompts (user-level, deprecated); repo skills at .agents/skills/<name>/SKILL.md invoked with $name; project agents .codex/agents/*.toml with name/description/developer_instructions and sandbox_mode="read-only"; .codex/hooks.json PreToolUse (matcher regex, JSON on stdin with tool_name/tool_input/cwd, exit 2 denies), trusted projects only; no custom status line. Cursor (cursor.com/docs): skills .cursor/skills/<name>/SKILL.md with disable-model-invocation for /name; subagents .cursor/agents/*.md with readonly: true; .cursor/hooks.json version 1 with beforeShellExecution {command,cwd} and preToolUse matcher Write, exit 2 denies, failClosed; no project status; reads AGENTS.md. Pi (github.com/earendil-works/pi-mono, package @earendil-works/pi-coding-agent): .pi/prompts/*.md with description/argument-hint and $ARGUMENTS; .pi/agents/*.md with tools restriction (subagent extension); .pi/extensions/*.ts with pi.on("tool_call") returning {block, reason} and ctx.ui.setStatus; project resources require trust.
+Decision: Every provider can host commands, roles and a guard; only Pi can show status; Claude already does.
+Gate: Proceed.
