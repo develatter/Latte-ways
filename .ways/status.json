@@ -1,12 +1,5 @@
 {
   "schemaVersion": 1,
-  "active": true,
-  "mode": "sdd",
-  "id": "provider-adapters",
-  "status": "active",
-  "gateCommit": "9f72b86239a3f8181e7e7d04eb12ebcb936cc1cc",
-  "updatedAt": "2026-09-02T11:58:14.245Z",
-  "phase": "close",
-  "humanGate": false,
-  "profile": "autonomous"
+  "active": false,
+  "updatedAt": "2026-09-02T11:59:18.250Z"
 }
