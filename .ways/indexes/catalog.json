@@ -10,6 +10,16 @@
       "status": "stable",
       "trust": "human-reviewed",
       "tags": []
+    },
+    {
+      "id": "conventions/provider-adapters",
+      "path": "conventions/provider-adapters.md",
+      "type": "convention",
+      "title": "provider-adapters",
+      "description": "",
+      "status": "draft",
+      "trust": "unverified",
+      "tags": []
     }
   ]
 }
