@@ -1,12 +1,5 @@
 {
   "schemaVersion": 1,
-  "active": true,
-  "mode": "sdd",
-  "id": "human-approvals",
-  "status": "active",
-  "gateCommit": "a29f4ff4f7660d0f2ed953f208c57ae6a6ffda6b",
-  "updatedAt": "2026-09-02T11:34:12.118Z",
-  "phase": "close",
-  "humanGate": false,
-  "profile": "autonomous"
+  "active": false,
+  "updatedAt": "2026-09-02T11:34:31.858Z"
 }
