@@ -1,12 +1,14 @@
 import { lstat, readFile, readlink } from "node:fs/promises";
 import { join } from "node:path";
-import { CONFIG_PATH, INDEX_DIR, KNOWLEDGE_DIR, MANIFEST_PATH, STATE_PATH } from "../domain/constants.js";
+import { CONFIG_PATH, INDEX_DIR, KNOWLEDGE_DIR, MANIFEST_PATH, STATE_PATH, STATUS_PATH } from "../domain/constants.js";
 import type { ManagedManifest, WorkState } from "../domain/types.js";
 import { validateConfig, validateManifest, validateState } from "../domain/validation.js";
 import { sha256 } from "../fs/files.js";
 import { indexesMatch } from "../knowledge/indexes.js";
 import { inspectOkf } from "../knowledge/okf.js";
 import { GitRepository } from "../git/git.js";
+import { readStatus, statusMatches } from "../state/status.js";
+import { commitsAfter } from "./history.js";
 
 export interface IntegrityIssue {
   code: string;
@@ -78,10 +80,19 @@ export async function checkIntegrity(cwd: string): Promise<IntegrityIssue[]> {
     }
   }
 
+  if (!statusMatches(await readStatus(cwd), activeState)) {
+    issues.push({ code: "status-divergence", path: STATUS_PATH, message: "Status artifact does not mirror the active state" });
+  }
+
   if (activeState) {
     try {
       const git = new GitRepository(cwd);
       const head = await git.head();
+      for (const commit of await commitsAfter(git, activeState.baseCommit)) {
+        if (commit.trailers.work !== activeState.id) {
+          issues.push({ code: "work-untraced", path: commit.hash.slice(0, 12), message: `Commit "${commit.subject}" is not traced to work ${activeState.id}` });
+        }
+      }
       if (activeState.mode === "sdd" && activeState.lastCompletedPhase) {
         const certification = await git.findCertification(activeState.id, activeState.lastCompletedPhase);
         if (!certification || !await git.isAncestor(certification.hash, head) || await git.parent(certification.hash) !== activeState.gateCommit) {

@@ -4,5 +4,6 @@
   "testCommand": [
     "npm",
     "test"
-  ]
+  ],
+  "historySince": "c1025e0bd2efcb52364e26825252f92012a242d3"
 }

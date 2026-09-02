@@ -1,11 +1,12 @@
-import { chmod, lstat, mkdir, readFile, symlink } from "node:fs/promises";
+import { chmod, lstat, mkdir, readFile, realpath, symlink } from "node:fs/promises";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { HARNESS_VERSION } from "../index.js";
-import { CONFIG_PATH, INDEX_DIR, KNOWLEDGE_DIR, MANIFEST_PATH, PLAN_DIR, SDD_DIR, STATE_PATH, WAYS_DIR } from "../domain/constants.js";
+import { CONFIG_PATH, HOOKS_DIR, INDEX_DIR, KNOWLEDGE_DIR, MANIFEST_PATH, PLAN_DIR, SDD_DIR, STATE_PATH, WAYS_DIR } from "../domain/constants.js";
 import type { HarnessConfig, ManagedManifest } from "../domain/types.js";
 import { sha256, stableJson, writeAtomic } from "../fs/files.js";
 import { GitRepository } from "../git/git.js";
+import { writeStatus } from "../state/status.js";
 
 export interface BootstrapOptions {
   cwd: string;
@@ -17,6 +18,7 @@ export const MANAGED_ASSETS: Array<[string, string, number?]> = [
   ["AGENTS.md", "AGENTS.md"],
   ["MAP.md", "MAP.md"],
   ["scripts/check.sh", "check.sh", 0o755],
+  [`${HOOKS_DIR}/commit-msg`, "commit-msg", 0o755],
   [".ways/agents/explorer.md", "agents/explorer.md"],
   [".ways/agents/implementer.md", "agents/implementer.md"],
   [".ways/agents/reviewer.md", "agents/reviewer.md"],
@@ -47,10 +49,14 @@ async function installFile(root: string, target: string, asset: string, force: b
   return sha256(content);
 }
 
+export async function installHooks(git: GitRepository): Promise<void> {
+  await git.run(["config", "core.hooksPath", HOOKS_DIR]);
+}
+
 export async function bootstrap(options: BootstrapOptions): Promise<ManagedManifest> {
-  const root = resolve(options.cwd);
+  const root = await realpath(resolve(options.cwd));
   const git = new GitRepository(root);
-  if (resolve(await git.root()) !== root) throw new Error("Bootstrap must run at the Git repository root");
+  if (await realpath(await git.root()) !== root) throw new Error("Bootstrap must run at the Git repository root");
   if (options.testCommand.length === 0) throw new Error("A test command is required");
   const force = options.force ?? false;
 
@@ -86,6 +92,8 @@ export async function bootstrap(options: BootstrapOptions): Promise<ManagedManif
     testCommand: [...options.testCommand],
   };
   await writeAtomic(join(root, CONFIG_PATH), stableJson(config));
+  await writeStatus(root, undefined);
+  await installHooks(git);
 
   const manifest: ManagedManifest = {
     schemaVersion: 1,

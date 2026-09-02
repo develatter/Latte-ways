@@ -6,7 +6,8 @@ import type { ApprovalProfile, WorkState } from "../domain/types.js";
 import { runChecks } from "../check/check.js";
 import { writeAtomic } from "../fs/files.js";
 import { GitRepository } from "../git/git.js";
-import { loadState, removeState, saveState } from "../state/store.js";
+import { loadState, saveState } from "../state/store.js";
+import { closeWork } from "./close.js";
 
 function planTemplate(id: string): string {
   return `---\ntype: plan\nstatus: proposed\nwork: ${id}\n---\n\n# Goal\n\n# Plan\n\n1. \n\n# Acceptance\n`;
@@ -60,9 +61,7 @@ export async function finishPlan(cwd: string, subject: string, memory: "updated"
   const checks = await runChecks(cwd);
   if (checks.issues.length > 0 || checks.testExitCode !== 0) throw new Error("Checks failed; plan cannot close");
   await rm(join(cwd, state.planPath), { force: true });
-  await removeState(cwd);
-  const git = new GitRepository(cwd);
-  return git.commit(await git.changedPaths(), subject, { work: state.id, state: "completed" });
+  return closeWork(cwd, subject, { work: state.id, state: "completed" });
 }
 
 export async function promotePlan(cwd: string, profile: ApprovalProfile): Promise<WorkState> {
@@ -92,7 +91,5 @@ export async function abandonPlan(cwd: string): Promise<string> {
   const state = await loadState(cwd);
   if (!state || state.mode !== "plan" || !state.planPath) throw new Error("No active plan");
   await rm(join(cwd, state.planPath), { force: true });
-  await removeState(cwd);
-  const git = new GitRepository(cwd);
-  return git.commit(await git.changedPaths(), `plan: abandon ${state.id}`, { work: state.id, state: "cancelled" });
+  return closeWork(cwd, `plan: abandon ${state.id}`, { work: state.id, state: "cancelled" });
 }

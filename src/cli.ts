@@ -3,11 +3,14 @@
 import { pathToFileURL } from "node:url";
 import { bootstrap } from "./bootstrap/bootstrap.js";
 import { runChecks } from "./check/check.js";
+import { runCommitMsgHook } from "./hooks/hook.js";
+import { checkHistory } from "./integrity/history.js";
 import { HARNESS_NAME, HARNESS_VERSION } from "./index.js";
 import { writeIndexes } from "./knowledge/indexes.js";
 import { inspectOkf } from "./knowledge/okf.js";
 import { queryKnowledge } from "./query/query.js";
 import { adoptHead, diagnose, restoreStateFromHead, rollbackToLastGate } from "./repair/repair.js";
+import { projectStatus } from "./state/status.js";
 import { loadState } from "./state/store.js";
 import { abandonPlan, finishPlan, promotePlan, proposePlan, startPlan } from "./work/plan.js";
 import { cancelQuick, finishQuick, startQuick } from "./work/quick.js";
@@ -68,8 +71,20 @@ export async function run(argv: readonly string[], cwd = process.cwd()): Promise
 
   if (command === "status") {
     const state = await loadState(cwd);
+    if (args.includes("--json")) {
+      console.log(JSON.stringify(projectStatus(state), null, 2));
+      return 0;
+    }
     console.log(state ? JSON.stringify(state, null, 2) : "No active mutating work.");
     return 0;
+  }
+
+  if (command === "hook") {
+    const [name, messagePath] = args;
+    if (name !== "commit-msg" || !messagePath) throw new Error("Usage: ways hook commit-msg <message-file>");
+    const verdict = await runCommitMsgHook(cwd, messagePath);
+    if (!verdict.accepted) console.error(`ways: ${verdict.reason}`);
+    return verdict.accepted ? 0 : 1;
   }
 
   if (command === "review") {
@@ -122,6 +137,14 @@ export async function run(argv: readonly string[], cwd = process.cwd()): Promise
   }
 
   if (command === "check") {
+    if (args.includes("--history")) {
+      const since = args.find((arg) => arg.startsWith("--since="))?.slice(8);
+      const issues = await checkHistory(cwd, since ? { since } : {});
+      for (const issue of issues) console.error(`${issue.code}: ${issue.path}: ${issue.message}`);
+      if (issues.length > 0) return 1;
+      console.log("History checks passed.");
+      return 0;
+    }
     const result = await runChecks(cwd, args.includes("--integrity-only"));
     for (const issue of result.issues) console.error(`${issue.code}: ${issue.path}: ${issue.message}`);
     if (result.issues.length > 0 || (result.testExitCode !== undefined && result.testExitCode !== 0)) return 1;

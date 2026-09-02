@@ -80,6 +80,18 @@ npx ways upgrade
 
 The canonical check validates managed files, schemas, state/Git consistency, compact agent prompts, OKF, derived indexes, and the configured unit-test command. Divergence fails closed; repair and destructive rollback always require explicit commands.
 
+## Mechanical enforcement
+
+Compliance does not depend on the agent obeying its prompt:
+
+- Bootstrap installs a managed `commit-msg` hook under `.ways/hooks/` and sets `core.hooksPath`. Any commit not traced to the active work with a matching `Harness-Work` trailer is rejected. Small edits open `ways quick start <id>` first.
+- `ways check --history [--since=<ref>]` audits every first-parent commit after the anchor (`--since`, `historySince` in config, or the commit that introduced `.ways/manifest.json`) for trailers and unbroken SDD certification chains. `scripts/check.sh` runs it, so a `--no-verify` bypass still fails in CI.
+- With an active work, integrity also fails on any commit after its base that lacks the work trailer.
+
+## Observable status
+
+`.ways/status.json` is a tracked, derived projection of the active state: `active`, `mode`, `id`, `status`, `phase`, `profile`, `humanGate`, `gateCommit`, `updatedAt`. It is rewritten on every transition, verified by integrity, and cheap to read from any agent statusline. `ways status --json` prints the same object.
+
 Upgrades compare managed-file hashes and never overwrite modified files without checklist approval.
 
 ## Development

@@ -1,6 +1,7 @@
 import { chmod, readFile } from "node:fs/promises";
 import { join } from "node:path";
-import { assetPath, MANAGED_ASSETS } from "../bootstrap/bootstrap.js";
+import { assetPath, installHooks, MANAGED_ASSETS } from "../bootstrap/bootstrap.js";
+import { GitRepository } from "../git/git.js";
 import { loadConfig } from "../config/config.js";
 import { MANIFEST_PATH } from "../domain/constants.js";
 import type { ManagedManifest } from "../domain/types.js";
@@ -58,5 +59,6 @@ export async function applyUpgrade(cwd: string, overwrite: Set<string>): Promise
     managedFiles,
   };
   await writeAtomic(join(cwd, MANIFEST_PATH), stableJson(next));
+  await installHooks(new GitRepository(cwd));
   return plan;
 }

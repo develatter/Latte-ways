@@ -10,3 +10,5 @@
 8. Bootstrap is reproducible on Linux/macOS and creates `CLAUDE.md` as a symlink.
 9. Upgrades never overwrite modified managed files without checklist approval.
 10. `scripts/check.sh` is the canonical local and CI entrypoint.
+11. A commit outside an active work is rejected by the managed hook and, if bypassed, by `ways check --history`.
+12. `.ways/status.json` always mirrors `current.json`; a stale artifact fails integrity.

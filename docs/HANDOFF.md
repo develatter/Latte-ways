@@ -18,6 +18,7 @@ Take latte-ways from a functional MVP to a dogfood-ready harness. Preserve its m
 - SDD phases, auto-commits, explicit repair, task worktrees, and review gates are implemented.
 - OKF v0.2 validation and deterministic catalog, graph, and search indexes are implemented.
 - Bootstrap, managed-file hashes, upgrade checklist, canonical Bash checks, and CI are implemented.
+- Mechanical enforcement: managed `commit-msg` hook, `ways check --history`, in-work trailer audit, and the derived `.ways/status.json` artifact with `ways status --json`.
 - The repository is clean and the full test suite passes at handoff.
 
 ## Priority 1: transactional safety
@@ -27,21 +28,28 @@ Take latte-ways from a functional MVP to a dogfood-ready harness. Preserve its m
 - Define conflict states and recovery for failed cherry-picks and partial worktree cleanup.
 - Never silently infer progress or discard project changes.
 
-## Priority 2: authentic approvals
+## Priority 2: provider adapters
+
+- Render slash commands, role subagents (orchestrator, explorer, implementer, reviewer, qa-unit, qa-mutation, sweeper), minimal skills, and a statusline reader from one neutral source in `assets/` into Claude, Codex, Pi, and Cursor formats via `ways adapter install <provider>`.
+- Adapters are managed files: hashed, upgradable, verified by integrity.
+- The human operates through natural language or generated slash commands; the CLI stays transparent.
+- Keep every role prompt at six non-empty lines or fewer.
+
+## Priority 3: authentic approvals
 
 - Replace the forgeable `--approved` flag with a portable human-approval artifact or TTY confirmation.
 - Bind approval to work id, phase, artifact digest, and Git revision.
-- Make reviewer independence mechanically inspectable rather than trusting a free-form string.
+- Bind review verdicts to the digest of the reviewed commit range; the reviewer is a subagent, and independence is proven by evidence, not identity.
 - Keep authentication optional at the adapter boundary only if the core can still verify evidence.
 
-## Priority 3: trustworthy memory
+## Priority 4: trustworthy memory
 
 - Verify local `sources` against paths and Git revisions, not only syntax.
 - Add explicit promotion, deprecation, freshness, and FAQ workflows.
 - Detect contradictory active concepts and surface them without inventing a winner.
 - Make `query` consume the derived search index instead of rescanning Markdown.
 
-## Priority 4: installation and CLI hardening
+## Priority 5: installation and CLI hardening
 
 - Test installation from `npm pack` as an actual consumer `devDependency`.
 - Add robust argument parsing, command-level help, stable exit codes, and structured output.
@@ -52,6 +60,7 @@ Take latte-ways from a functional MVP to a dogfood-ready harness. Preserve its m
 ## Known limitations
 
 - Human approval is currently a CLI boolean and can be forged by an agent.
+- Hooks can be bypassed with `--no-verify` or a relocated `WAYS_CLI`; `ways check --history` in CI is the backstop.
 - Reviewer identity is declarative; read-only behavior is a protocol rather than a sandbox.
 - Git/state operations have recovery commands but are not yet transaction-journaled.
 - Worktree integration has happy-path coverage; conflict recovery needs dedicated states.

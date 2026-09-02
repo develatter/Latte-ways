@@ -6,10 +6,9 @@ import { PLAN_DIR, SDD_DIR } from "../domain/constants.js";
 import { SDD_PHASES, type ApprovalProfile, type SddPhase, type WorkState } from "../domain/types.js";
 import { writeAtomic } from "../fs/files.js";
 import { GitRepository } from "../git/git.js";
+import { HUMAN_GATES } from "../state/status.js";
 import { loadState, removeState, saveState } from "../state/store.js";
 import { assertReviewPassed } from "./review.js";
-
-const HUMAN_GATES = new Set<SddPhase>(["intake", "plan", "close"]);
 
 function phasePath(state: WorkState, phase: SddPhase): string {
   return `${SDD_DIR}/${state.id}/${phase}.md`;

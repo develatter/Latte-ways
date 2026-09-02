@@ -26,6 +26,7 @@ it("isolates a worker and integrates only traced commits", async () => {
     gateCommit: await git.parent(head), createdAt: new Date().toISOString(), updatedAt: new Date().toISOString(),
     tasks: [{ id: "api", title: "Build API", status: "ready", dependsOn: [], commits: [] }],
   });
+  await git.commit(await git.changedPaths(), "sdd(decompose): complete parallel-work", { work: "parallel-work", phase: "decompose", state: "completed" });
   const task = await prepareTask(cwd, "api");
   const worker = new GitRepository(task.worktree!);
   await writeFile(join(task.worktree!, "api.ts"), "export const api = true;\n");

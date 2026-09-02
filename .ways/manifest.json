@@ -3,13 +3,14 @@
   "harnessVersion": "0.1.0",
   "generatedAt": "2026-09-01T23:11:47.355Z",
   "managedFiles": {
-    "AGENTS.md": "6cbaa5deb71d9a01ebfd0d2141b361ce303b48a28fd20d6c573ed39bfbaa0dac",
-    "MAP.md": "cc61652354df235d96ec7b9b39bb4249a0cfca79ae971bf413ef17151e6237e6",
-    "scripts/check.sh": "951cc470833e05cc9d154f732e00c7d830a4e6e6bcae5373f2c7c81c7583be82",
+    "AGENTS.md": "7a1898834d16766d18cd9a12ab9553fa4eb0e30f060a7e693128050560837596",
+    "MAP.md": "6673ea65510121dc92b8f4f6e555611995b10f5b73b1f11fb1cf8584c8b34f3e",
+    "scripts/check.sh": "47e15a01b7eba13596e6eb0a07b67d38914b77e6757baecf4ce393b550587ffc",
     ".ways/agents/explorer.md": "6cdc4529518b8b2a00b3d0bf90e925efc3626b35418bf4cc3c27dd73bc9158d3",
     ".ways/agents/implementer.md": "ef5144b9ff151ad11779b9950405544444c2e71d832824b13d7a0f97a858953a",
     ".ways/agents/reviewer.md": "36ec6f6f059bdda2e9a40131d21c19014d3ad7a279dbb6e5dc2de4125dbfa9e9",
     ".ways/agents/orchestrator.md": "898cb25c9b162406e3b251b05fb063d2038b69352262eca2fc5b1e172e5bccf2",
-    ".ways/.gitignore": "bf8cd769ff4e47c7f82e7c84ba7b2c6c2f56a24fb27bb77dbfa815870d396c8f"
+    ".ways/.gitignore": "bf8cd769ff4e47c7f82e7c84ba7b2c6c2f56a24fb27bb77dbfa815870d396c8f",
+    ".ways/hooks/commit-msg": "b0e02e2a27dce1282c2532308f8b9dc8515a0dfc0c698e1955ca0e47c181a54d"
   }
 }

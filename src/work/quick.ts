@@ -3,6 +3,7 @@ import type { WorkState } from "../domain/types.js";
 import { runChecks } from "../check/check.js";
 import { GitRepository } from "../git/git.js";
 import { loadState, removeState, saveState } from "../state/store.js";
+import { closeWork } from "./close.js";
 
 function assertId(id: string): void {
   if (!/^[a-z0-9][a-z0-9-]{1,62}$/.test(id)) throw new Error("Work id must be a 2-63 character lowercase slug");
@@ -41,10 +42,7 @@ export async function finishQuick(cwd: string, subject: string, memory: "updated
   if (checks.issues.length > 0) throw new Error(checks.issues.map((issue) => `${issue.path}: ${issue.message}`).join("\n"));
   if (checks.testExitCode !== 0) throw new Error(`Tests failed with exit code ${checks.testExitCode}`);
 
-  await removeState(cwd);
-  const git = new GitRepository(cwd);
-  const paths = await git.changedPaths();
-  return git.commit(paths, subject.trim(), { work: state.id, state: "completed" });
+  return closeWork(cwd, subject.trim(), { work: state.id, state: "completed" });
 }
 
 export async function cancelQuick(cwd: string): Promise<void> {

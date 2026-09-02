@@ -12,6 +12,7 @@
       "minItems": 1,
       "items": { "type": "string", "minLength": 1 }
     },
-    "defaultBranch": { "type": "string", "minLength": 1 }
+    "defaultBranch": { "type": "string", "minLength": 1 },
+    "historySince": { "type": "string", "minLength": 7 }
   }
 }

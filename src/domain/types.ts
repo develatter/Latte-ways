@@ -54,6 +54,7 @@ export interface HarnessConfig {
   harnessVersion: string;
   testCommand: string[];
   defaultBranch?: string;
+  historySince?: string;
 }
 
 export interface ManagedManifest {
