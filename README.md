@@ -23,7 +23,7 @@ Long-running coding agents tend to lose state, skip process, perform unnecessary
 ## Installation
 
 ```bash
-npm install --save-dev latte-ways
+npm install --save-dev @develatter/latte-ways --registry=https://npm.pkg.github.com
 npx ways bootstrap --test-command='["npm","test"]'
 scripts/check.sh
 ```

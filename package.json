@@ -1,10 +1,10 @@
 {
-  "name": "latte-ways",
-  "version": "0.1.0",
+  "name": "@develatter/latte-ways",
+  "version": "0.1.1",
   "description": "A minimal, agent-agnostic development harness with Git-backed workflows and living OKF memory",
   "type": "module",
   "bin": {
-    "ways": "./dist/cli.js"
+    "ways": "dist/cli.js"
   },
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",
@@ -36,6 +36,9 @@
     "sdd"
   ],
   "license": "MIT",
+  "publishConfig": {
+    "registry": "https://npm.pkg.github.com"
+  },
   "dependencies": {
     "ajv": "^8.17.1",
     "yaml": "^2.8.1"
