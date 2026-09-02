@@ -60,6 +60,7 @@ Take latte-ways from a functional MVP to a dogfood-ready harness. Preserve its m
 ## Known limitations
 
 - Approvals and review verdicts are plain files: the TTY barrier, the digest binding, the hook and the guard stop an agent from approving through its tools or the CLI, but a shell script (a heredoc, `node -e` importing `dist/`, or `script` to fake a pty) can still fabricate the artifact. Only the binding is verified afterwards, not who wrote the file; the guard only intercepts obviously write-shaped commands naming those paths.
+- Rewriting `mode` in the disk state of a supervised work lets traced-looking commits land, but no gate accepts them: finishing or closing is rejected and integrity flags `state-git-divergence`; `ways repair` recovers.
 - Hooks can be bypassed with `--no-verify` or a relocated `WAYS_CLI`; `ways check --history` in CI is the backstop.
 - In delegated SDD the Claude guard blocks the four edit tools in the main worktree; Bash-driven writes are not intercepted and a hand-made `.ways/runtime/task.json` silences it. The implement gate, which only accepts commit hashes recorded by `task integrate`, is the mechanical backstop.
 - The Claude PreToolUse guard only recognises `git commit` invocations (including `command`/`exec` prefixes, absolute paths, subshells and `sh -c` strings); cherry-pick, merge, rebase or `gh pr merge` are not intercepted. It fails closed when `node` is missing from the hook PATH. The managed `commit-msg` hook and `check --history` remain the mechanical backstop.
