@@ -18,6 +18,7 @@ export type SddPhase = (typeof SDD_PHASES)[number];
 
 export type WorkStatus = "active" | "blocked" | "completed" | "cancelled";
 export type ApprovalProfile = "autonomous" | "supervised";
+export type ExecutionMode = "inline" | "delegated";
 export type TaskStatus = "pending" | "ready" | "active" | "review" | "completed" | "blocked";
 export type FindingSeverity = "critical" | "high" | "medium" | "low";
 export type FindingDisposition = "open" | "fixed" | "accepted" | "deferred";
@@ -43,6 +44,7 @@ export interface WorkState {
   createdAt: string;
   updatedAt: string;
   profile?: ApprovalProfile;
+  execution?: ExecutionMode;
   phase?: SddPhase;
   lastCompletedPhase?: SddPhase;
   planPath?: string;

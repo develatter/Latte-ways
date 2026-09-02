@@ -191,6 +191,37 @@ describe("history verification", () => {
   });
 });
 
+describe("delegated execution", () => {
+  it("refuses to certify implement unless every commit came from an integrated task", async () => {
+    const { cwd, git } = await repository();
+    await startSdd(cwd, "deleg", "autonomous", "delegated");
+    expect((await readStatus(cwd))?.execution).toBe("delegated");
+    for (const phase of ["intake", "explore", "assess", "specify", "plan"]) {
+      await fillPhase(cwd, "deleg", phase);
+      await advanceSdd(cwd);
+    }
+    await fillPhase(cwd, "deleg", "decompose");
+    await advanceSdd(cwd);
+    await fillPhase(cwd, "deleg", "implement");
+    await expect(advanceSdd(cwd)).rejects.toThrow(/requires at least one task/);
+    const { addTask, integrateTask, prepareTask } = await import("../src/work/tasks.js");
+    const state = (await loadState(cwd))!;
+    state.phase = "decompose";
+    await saveState(cwd, state);
+    await addTask(cwd, "api", "Build API");
+    state.phase = "implement";
+    await saveState(cwd, { ...(await loadState(cwd))!, phase: "implement" });
+    await writeFile(join(cwd, "direct.ts"), "// orchestrator wrote this\n");
+    await git.commit(["direct.ts"], "feat: direct", { work: "deleg" });
+    const task = await prepareTask(cwd, "api");
+    const worker = new GitRepository(task.worktree!);
+    await writeFile(join(task.worktree!, "api.ts"), "export const api = true;\n");
+    const commit = await worker.commit(["api.ts"], "feat: api", { work: "deleg", task: "api" });
+    await integrateTask(cwd, "api", [commit]);
+    await expect(advanceSdd(cwd)).rejects.toThrow(/not integrated from a task/);
+  });
+});
+
 describe("bootstrap hooks", () => {
   it("installs a managed commit-msg hook and points core.hooksPath at it", async () => {
     const { cwd, git } = await repository();

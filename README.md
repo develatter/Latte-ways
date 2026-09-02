@@ -56,6 +56,8 @@ intake → explore → assess → specify → plan → decompose
 
 Each transition validates the previous certification in Git, updates JSON state, and creates an atomic commit with machine-readable trailers. `assess` can explicitly downgrade small work to `quick` or `plan`.
 
+SDD runs `inline` (the agent may implement itself) or `--delegated` (the session is the orchestrator and never edits code: implementation always arrives through subagent task worktrees, integrated in dependency order, in parallel when independent). The implement gate in delegated mode rejects any commit that was not integrated from a task, and the Claude guard blocks `Edit`/`Write` in the main worktree during that phase.
+
 Parallel tasks run in isolated worktrees. The core creates task packets and integrates traced commits, but deliberately does not launch agents. Review is delegated, read-only, severity-gated, and required even when implementation is inline.
 
 ## Knowledge

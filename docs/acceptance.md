@@ -14,3 +14,4 @@
 12. `.ways/status.json` always mirrors `current.json`; a stale artifact fails integrity.
 13. Bootstrap renders every registered provider adapter from `assets/adapters/`; tampering with a rendered file fails integrity.
 14. No role prompt exceeds six non-empty lines; loading the canonical source enforces it.
+15. In delegated SDD, the implement gate refuses commits that were not integrated from a task; the orchestrator cannot implement.

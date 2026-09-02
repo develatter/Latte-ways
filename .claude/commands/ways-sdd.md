@@ -1,6 +1,8 @@
 ---
-description: Strict phased delivery with certified gates
-argument-hint: <id> [--supervised]
+description: Strict phased delivery with certified gates, inline or delegated
+argument-hint: <id> [--supervised] [--delegated]
 ---
 
-Run `npx ways sdd start $ARGUMENTS`, then work phase by phase: fill the current `.ways/sdd/<id>/<phase>.md` with Goal, Evidence, Decision and Gate, and certify it with `npx ways sdd advance`. Delegate implementation to ways-implementer, review to ways-reviewer, and testing to ways-qa; never edit a certified phase file. At a supervised human gate, stop and ask the human to approve it themselves; never pass `--approved` on their behalf. Report each certification commit.
+Run `npx ways sdd start $ARGUMENTS`, then work phase by phase: fill `.ways/sdd/<id>/<phase>.md` with Goal, Evidence, Decision and Gate, and certify with `npx ways sdd advance`; never edit a certified phase file. At a supervised human gate stop and ask the human to approve it themselves; never pass `--approved` for them.
+Inline (default): you may implement yourself, and still use ways-explorer, ways-reviewer and ways-qa when useful.
+Delegated (`--delegated`): you are the orchestrator and never edit code. At decompose declare tasks with `npx ways task add <id> --title=... [--depends=a,b]`, offering the human parallel or sequential splits. At implement, for each ready task run `npx ways task prepare <id>` and launch one ways-implementer on its worktree with the packet in `.ways/runtime/task.json`; run independent tasks in parallel and dependent ones in sequence; integrate with `npx ways task integrate <id> --commits=...` in order. Delegate review to ways-reviewer and testing to ways-qa, relay their findings back to implementers, and only advance when the gate passes.

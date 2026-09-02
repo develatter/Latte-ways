@@ -12,10 +12,11 @@ field() { sed -n "s/.*\"$1\": *\"\([^\"]*\)\".*/\1/p" "$file" | head -n 1; }
 if [ ! -f "$file" ]; then out="ways: not installed"
 elif grep -q '"active": *false' "$file"; then out="ways: idle"
 else
-  mode="$(field mode)"; id="$(field id)"; phase="$(field phase)"; profile="$(field profile)"
+  mode="$(field mode)"; id="$(field id)"; phase="$(field phase)"; profile="$(field profile)"; execution="$(field execution)"
   out="ways: $mode:$id"
   [ -n "$phase" ] && out="$out @$phase"
   [ -n "$profile" ] && out="$out [$profile]"
+  [ "$execution" = "delegated" ] && out="$out delegated"
   grep -q '"humanGate": *true' "$file" && out="$out HUMAN GATE"
 fi
 if [ -n "$prefix" ]; then printf '%s | %s' "$prefix" "$out"; else printf '%s' "$out"; fi

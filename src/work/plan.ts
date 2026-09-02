@@ -2,7 +2,7 @@ import { mkdir, readFile, rm } from "node:fs/promises";
 import { join } from "node:path";
 import { HARNESS_VERSION } from "../index.js";
 import { PLAN_DIR, SDD_DIR } from "../domain/constants.js";
-import type { ApprovalProfile, WorkState } from "../domain/types.js";
+import type { ApprovalProfile, ExecutionMode, WorkState } from "../domain/types.js";
 import { runChecks } from "../check/check.js";
 import { writeAtomic } from "../fs/files.js";
 import { GitRepository } from "../git/git.js";
@@ -64,7 +64,7 @@ export async function finishPlan(cwd: string, subject: string, memory: "updated"
   return closeWork(cwd, subject, { work: state.id, state: "completed" });
 }
 
-export async function promotePlan(cwd: string, profile: ApprovalProfile): Promise<WorkState> {
+export async function promotePlan(cwd: string, profile: ApprovalProfile, execution: ExecutionMode = "inline"): Promise<WorkState> {
   const state = await loadState(cwd);
   if (!state || state.mode !== "plan" || !state.planPath) throw new Error("No active plan");
   const git = new GitRepository(cwd);
@@ -78,6 +78,8 @@ export async function promotePlan(cwd: string, profile: ApprovalProfile): Promis
   await writeAtomic(join(cwd, SDD_DIR, state.id, "intake.md"), "# intake\n\nGoal:\nEvidence:\nDecision:\nGate:\n");
   state.mode = "sdd";
   state.profile = profile;
+  if (execution === "delegated") state.execution = execution;
+  else delete state.execution;
   state.phase = "intake";
   state.baseCommit = head;
   state.gateCommit = head;

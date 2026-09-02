@@ -15,6 +15,7 @@
     "createdAt": { "type": "string", "format": "date-time" },
     "updatedAt": { "type": "string", "format": "date-time" },
     "profile": { "enum": ["autonomous", "supervised"] },
+    "execution": { "enum": ["inline", "delegated"] },
     "phase": { "enum": ["intake", "explore", "assess", "specify", "plan", "decompose", "implement", "review", "validate", "reconcile-memory", "close"] },
     "lastCompletedPhase": { "$ref": "#/properties/phase" },
     "planPath": { "type": "string", "minLength": 1 },

@@ -68,8 +68,19 @@ function guardGroups(settings: Settings): HookGroup[] {
   return hooks.PreToolUse as HookGroup[];
 }
 
+const GUARD_MATCHERS = ["Bash", "Edit|Write|MultiEdit|NotebookEdit"];
+
+function guardMatchers(settings: Settings): Set<string> {
+  const found = new Set<string>();
+  for (const group of guardGroups(settings)) {
+    if (group.hooks?.some((hook) => hook.command === GUARD_COMMAND) && group.matcher) found.add(group.matcher);
+  }
+  return found;
+}
+
 export function hasGuard(settings: Settings): boolean {
-  return guardGroups(settings).some((group) => group.hooks?.some((hook) => hook.command === GUARD_COMMAND));
+  const found = guardMatchers(settings);
+  return GUARD_MATCHERS.every((matcher) => found.has(matcher));
 }
 
 function shellQuote(value: string): string {
@@ -94,7 +105,10 @@ export function mergeClaudeSettings(settings: Settings): { settings: Settings; n
   }
   const hooks: Settings = isObject(next.hooks) ? { ...next.hooks } : {};
   const groups = Array.isArray(hooks.PreToolUse) ? [...(hooks.PreToolUse as HookGroup[])] : [];
-  if (!hasGuard(next)) groups.push({ matcher: "Bash", hooks: [{ type: "command", command: GUARD_COMMAND }] });
+  const present = guardMatchers(next);
+  for (const matcher of GUARD_MATCHERS) {
+    if (!present.has(matcher)) groups.push({ matcher, hooks: [{ type: "command", command: GUARD_COMMAND }] });
+  }
   hooks.PreToolUse = groups;
   next.hooks = hooks;
   return { settings: next, notes };

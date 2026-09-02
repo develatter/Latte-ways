@@ -11,7 +11,9 @@ import { run } from "../src/cli.js";
 import { GitRepository } from "../src/git/git.js";
 import { checkIntegrity } from "../src/integrity/integrity.js";
 import { applyUpgrade, planUpgrade } from "../src/upgrade/upgrade.js";
+import { saveState } from "../src/state/store.js";
 import { startSdd } from "../src/work/sdd.js";
+import { prepareTask } from "../src/work/tasks.js";
 
 const ROLES = ["explorer", "implementer", "reviewer", "qa", "sweeper"];
 const COMMANDS = ["status", "query", "quick", "plan", "sdd"];
@@ -66,8 +68,9 @@ describe("claude renderer", () => {
     expect(twice.settings).toEqual(once.settings);
     expect(once.settings.theme).toBe("dark");
     expect(hasGuard(once.settings)).toBe(true);
-    const groups = (once.settings.hooks as { PreToolUse: Array<{ hooks: Array<{ command: string }> }> }).PreToolUse;
-    expect(groups.flatMap((group) => group.hooks.map((hook) => hook.command))).toEqual(["mine.sh", "\"$CLAUDE_PROJECT_DIR\"/.claude/ways-guard.sh"]);
+    const groups = (once.settings.hooks as { PreToolUse: Array<{ matcher: string; hooks: Array<{ command: string }> }> }).PreToolUse;
+    expect(groups.map((group) => group.matcher)).toEqual(["Write", "Bash", "Edit|Write|MultiEdit|NotebookEdit"]);
+    expect(groups.flatMap((group) => group.hooks.map((hook) => hook.command))).toEqual(["mine.sh", "\"$CLAUDE_PROJECT_DIR\"/.claude/ways-guard.sh", "\"$CLAUDE_PROJECT_DIR\"/.claude/ways-guard.sh"]);
   });
 
   it("wraps a user-defined statusline instead of replacing it, idempotently", () => {
@@ -168,5 +171,35 @@ describe("adapter installation", () => {
     await startSdd(cwd, "demo", "supervised");
     expect(run(".claude/ways-statusline.sh", { workspace: { project_dir: cwd } }).stdout).toBe("ways: sdd:demo @intake [supervised] HUMAN GATE");
     expect(run(".claude/ways-guard.sh", { tool_input: { command: "git commit -m x" }, cwd }).code).toBe(0);
+  });
+
+  it("blocks orchestrator edits during delegated implement but not inside task worktrees", async () => {
+    const { cwd, git } = await repository();
+    await bootstrap({ cwd, testCommand: [process.execPath, "-e", "process.exit(0)"] });
+    await git.run(["add", "."]);
+    await git.run(["commit", "-q", "-m", "bootstrap"]);
+    const run = (payload: unknown): number => {
+      try {
+        execFileSync("sh", [join(cwd, ".claude/ways-guard.sh")], { cwd, input: JSON.stringify(payload), encoding: "utf8", stdio: ["pipe", "pipe", "pipe"] });
+        return 0;
+      } catch (error) {
+        return (error as { status: number }).status;
+      }
+    };
+    const edit = (dir: string) => ({ tool_name: "Edit", tool_input: { file_path: join(dir, "src.ts") }, cwd });
+    const head = await git.head();
+    await saveState(cwd, {
+      schemaVersion: 1, harnessVersion: "0.1.0", id: "deleg", mode: "sdd", status: "active", profile: "autonomous", execution: "delegated",
+      phase: "implement", lastCompletedPhase: "decompose", baseCommit: head, gateCommit: await git.parent(head),
+      createdAt: new Date().toISOString(), updatedAt: new Date().toISOString(),
+      tasks: [{ id: "api", title: "Build API", status: "ready", dependsOn: [], commits: [] }],
+    });
+    expect(run(edit(cwd))).toBe(2);
+    expect(run({ tool_name: "Read", tool_input: { file_path: join(cwd, "src.ts") }, cwd })).toBe(0);
+    await git.commit(await git.changedPaths(), "sdd(decompose): complete deleg", { work: "deleg", phase: "decompose", state: "completed" });
+    const task = await prepareTask(cwd, "api");
+    expect(run(edit(task.worktree!))).toBe(0);
+    const statusline = execFileSync("sh", [join(cwd, ".claude/ways-statusline.sh")], { cwd, input: JSON.stringify({ workspace: { project_dir: cwd } }), encoding: "utf8" });
+    expect(statusline).toBe("ways: sdd:deleg @implement [autonomous] delegated");
   });
 });

@@ -3,9 +3,10 @@ import { join } from "node:path";
 import { HARNESS_VERSION } from "../index.js";
 import { runChecks } from "../check/check.js";
 import { PLAN_DIR, SDD_DIR } from "../domain/constants.js";
-import { SDD_PHASES, type ApprovalProfile, type SddPhase, type WorkState } from "../domain/types.js";
+import { SDD_PHASES, type ApprovalProfile, type ExecutionMode, type SddPhase, type WorkState } from "../domain/types.js";
 import { writeAtomic } from "../fs/files.js";
 import { GitRepository } from "../git/git.js";
+import { commitsAfter } from "../integrity/history.js";
 import { HUMAN_GATES } from "../state/status.js";
 import { loadState, removeState, saveState } from "../state/store.js";
 import { assertReviewPassed } from "./review.js";
@@ -45,7 +46,17 @@ export async function assertSddConsistency(cwd: string, state: WorkState): Promi
   if (await git.parent(commit.hash) !== state.gateCommit) throw new Error("State gate commit does not match certification parent; run ways repair");
 }
 
-export async function startSdd(cwd: string, id: string, profile: ApprovalProfile): Promise<WorkState> {
+/** In delegated execution every implementation commit must come from an integrated task. */
+async function assertDelegatedImplementation(cwd: string, state: WorkState): Promise<void> {
+  if (state.tasks.length === 0) throw new Error("Delegated execution requires at least one task; declare tasks during decompose");
+  const git = new GitRepository(cwd);
+  for (const commit of await commitsAfter(git, state.gateCommit)) {
+    if (commit.trailers.work === state.id && commit.trailers.task) continue;
+    throw new Error(`Commit ${commit.hash.slice(0, 12)} "${commit.subject}" was not integrated from a task; the orchestrator must not implement in delegated execution`);
+  }
+}
+
+export async function startSdd(cwd: string, id: string, profile: ApprovalProfile, execution: ExecutionMode = "inline"): Promise<WorkState> {
   if (!/^[a-z0-9][a-z0-9-]{1,62}$/.test(id)) throw new Error("Work id must be a lowercase slug");
   if (await loadState(cwd)) throw new Error("Another mutating work is already active");
   const git = new GitRepository(cwd);
@@ -59,6 +70,7 @@ export async function startSdd(cwd: string, id: string, profile: ApprovalProfile
     mode: "sdd",
     status: "active",
     profile,
+    ...(execution === "delegated" ? { execution } : {}),
     phase: "intake",
     baseCommit: head,
     gateCommit: head,
@@ -82,6 +94,7 @@ export async function advanceSdd(cwd: string, approved = false): Promise<string>
   if (state.phase === "implement" && state.tasks.some((task) => task.status !== "completed")) {
     throw new Error("Every declared task must be integrated before implementation can complete");
   }
+  if (state.phase === "implement" && state.execution === "delegated") await assertDelegatedImplementation(cwd, state);
   if (state.phase === "review") await assertReviewPassed(cwd, state.id);
   if (state.phase === "validate" || state.phase === "close") {
     const checks = await runChecks(cwd);

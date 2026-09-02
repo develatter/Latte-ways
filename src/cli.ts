@@ -124,8 +124,9 @@ export async function run(argv: readonly string[], cwd = process.cwd()): Promise
     const [action, id] = args;
     if (action === "start" && id) {
       const profile = args.includes("--supervised") ? "supervised" : "autonomous";
-      const state = await startSdd(cwd, id, profile);
-      console.log(`SDD started at ${state.phase} (${profile}).`);
+      const execution = args.includes("--delegated") ? "delegated" : "inline";
+      const state = await startSdd(cwd, id, profile, execution);
+      console.log(`SDD started at ${state.phase} (${profile}, ${execution}).`);
       return 0;
     }
     if (action === "advance") {
@@ -136,7 +137,7 @@ export async function run(argv: readonly string[], cwd = process.cwd()): Promise
       console.log(`SDD downgraded: ${await downgradeSdd(cwd, id)}`);
       return 0;
     }
-    throw new Error("Usage: ways sdd start <id> [--supervised] | advance [--approved] | downgrade <quick|plan>");
+    throw new Error("Usage: ways sdd start <id> [--supervised] [--delegated] | advance [--approved] | downgrade <quick|plan>");
   }
 
   if (command === "adapter") {
@@ -182,7 +183,7 @@ export async function run(argv: readonly string[], cwd = process.cwd()): Promise
       return 0;
     }
     if (action === "promote") {
-      const state = await promotePlan(cwd, args.includes("--supervised") ? "supervised" : "autonomous");
+      const state = await promotePlan(cwd, args.includes("--supervised") ? "supervised" : "autonomous", args.includes("--delegated") ? "delegated" : "inline");
       console.log(`Plan promoted to SDD at ${state.phase}.`);
       return 0;
     }
@@ -196,7 +197,7 @@ export async function run(argv: readonly string[], cwd = process.cwd()): Promise
       console.log(`Plan abandoned: ${await abandonPlan(cwd)}`);
       return 0;
     }
-    throw new Error("Usage: ways plan start <id> | propose | promote [--supervised] | finish --message=<subject> --memory=<updated|unchanged> | abandon");
+    throw new Error("Usage: ways plan start <id> | propose | promote [--supervised] [--delegated] | finish --message=<subject> --memory=<updated|unchanged> | abandon");
   }
 
   if (command === "quick") {

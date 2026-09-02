@@ -1,25 +1,39 @@
 #!/usr/bin/env sh
-# Managed by latte-ways. Blocks agent-issued git commits when no harness work is active.
+# Managed by latte-ways. Blocks agent-issued git commits when no harness work is active,
+# and blocks file edits in the main worktree while a delegated SDD implement phase is running.
 input="$(cat)"
-case "$input" in *commit*) ;; *) exit 0 ;; esac
+case "$input" in *commit*|*Edit*|*Write*) ;; *) exit 0 ;; esac
 command -v node >/dev/null 2>&1 || { echo "ways: node not found; refusing to run git commit without the guard" >&2; exit 2; }
 printf '%s' "$input" | exec node -e '
 let data = "";
 process.stdin.on("data", (chunk) => { data += chunk; }).on("end", () => {
-  let command = "";
-  try { command = String(JSON.parse(data).tool_input?.command ?? ""); } catch { process.exit(0); }
+  let event;
+  try { event = JSON.parse(data); } catch { process.exit(0); }
+  const tool = String(event.tool_name ?? "");
+  const command = String(event.tool_input?.command ?? "");
+  const edits = /^(Edit|Write|MultiEdit|NotebookEdit)$/.test(tool);
   const option = "(?:-[^\\s]+\\s+(?:[^-\\s][^\\s]*\\s+)?)*";
   const prefix = "(?:(?:command|exec|builtin)\\s+|[^\\s;&|(`]*/)?";
   const commits = new RegExp("(?:^|[;&|(`\\x22\\x27]\\s*|\\$\\(\\s*)" + prefix + "git\\s+" + option + "commit(?:\\s|$)", "m");
-  if (!commits.test(command)) process.exit(0);
+  if (!edits && !commits.test(command)) process.exit(0);
   const { execFileSync } = require("node:child_process");
   const { existsSync, readFileSync } = require("node:fs");
+  const { dirname, resolve } = require("node:path");
+  const target = edits && typeof event.tool_input?.file_path === "string" ? dirname(resolve(String(event.cwd ?? process.cwd()), event.tool_input.file_path)) : String(event.cwd ?? process.cwd());
   let root;
-  try { root = execFileSync("git", ["rev-parse", "--show-toplevel"], { encoding: "utf8", stdio: ["ignore", "pipe", "ignore"] }).trim(); } catch { process.exit(0); }
+  try { root = execFileSync("git", ["rev-parse", "--show-toplevel"], { cwd: target, encoding: "utf8", stdio: ["ignore", "pipe", "ignore"] }).trim(); } catch { process.exit(0); }
   const file = `${root}/.ways/status.json`;
   if (!existsSync(file)) process.exit(0);
   let status;
   try { status = JSON.parse(readFileSync(file, "utf8")); } catch { process.exit(0); }
+  if (edits) {
+    if (existsSync(`${root}/.ways/runtime/task.json`)) process.exit(0);
+    if (status.mode === "sdd" && status.execution === "delegated" && status.phase === "implement") {
+      process.stderr.write("ways: delegated execution; the orchestrator must not edit code. Prepare a task worktree and delegate to {{role:implementer}}\n");
+      process.exit(2);
+    }
+    process.exit(0);
+  }
   if (status.active === false) {
     process.stderr.write("ways: no active work; open one with {{command:quick}}, {{command:plan}} or {{command:sdd}} before committing\n");
     process.exit(2);
