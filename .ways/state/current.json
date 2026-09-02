@@ -1,0 +1,13 @@
+{
+  "schemaVersion": 1,
+  "harnessVersion": "0.1.0",
+  "id": "living-memory",
+  "mode": "plan",
+  "status": "active",
+  "baseCommit": "51d3090cba27ba63193dd7769af1ff14d58139c0",
+  "gateCommit": "51d3090cba27ba63193dd7769af1ff14d58139c0",
+  "createdAt": "2026-09-02T22:41:05.498Z",
+  "updatedAt": "2026-09-02T22:41:05.498Z",
+  "planPath": ".ways/plans/living-memory.md",
+  "tasks": []
+}
