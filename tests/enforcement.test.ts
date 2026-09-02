@@ -192,33 +192,57 @@ describe("history verification", () => {
 });
 
 describe("delegated execution", () => {
-  it("refuses to certify implement unless every commit came from an integrated task", async () => {
-    const { cwd, git } = await repository();
+  async function delegatedAtImplement(cwd: string): Promise<void> {
     await startSdd(cwd, "deleg", "autonomous", "delegated");
     expect((await readStatus(cwd))?.execution).toBe("delegated");
+    const { addTask } = await import("../src/work/tasks.js");
     for (const phase of ["intake", "explore", "assess", "specify", "plan"]) {
       await fillPhase(cwd, "deleg", phase);
       await advanceSdd(cwd);
     }
+    await addTask(cwd, "api", "Build API");
     await fillPhase(cwd, "deleg", "decompose");
     await advanceSdd(cwd);
     await fillPhase(cwd, "deleg", "implement");
-    await expect(advanceSdd(cwd)).rejects.toThrow(/requires at least one task/);
-    const { addTask, integrateTask, prepareTask } = await import("../src/work/tasks.js");
-    const state = (await loadState(cwd))!;
-    state.phase = "decompose";
-    await saveState(cwd, state);
-    await addTask(cwd, "api", "Build API");
-    state.phase = "implement";
-    await saveState(cwd, { ...(await loadState(cwd))!, phase: "implement" });
-    await writeFile(join(cwd, "direct.ts"), "// orchestrator wrote this\n");
-    await git.commit(["direct.ts"], "feat: direct", { work: "deleg" });
+  }
+
+  async function integrateWorker(cwd: string): Promise<void> {
+    const { integrateTask, prepareTask } = await import("../src/work/tasks.js");
     const task = await prepareTask(cwd, "api");
     const worker = new GitRepository(task.worktree!);
     await writeFile(join(task.worktree!, "api.ts"), "export const api = true;\n");
-    const commit = await worker.commit(["api.ts"], "feat: api", { work: "deleg", task: "api" });
-    await integrateTask(cwd, "api", [commit]);
-    await expect(advanceSdd(cwd)).rejects.toThrow(/not integrated from a task/);
+    await integrateTask(cwd, "api", [await worker.commit(["api.ts"], "feat: api", { work: "deleg", task: "api" })]);
+  }
+
+  it("certifies implement when every commit was integrated from a task", async () => {
+    const { cwd, git } = await repository();
+    await delegatedAtImplement(cwd);
+    await expect(advanceSdd(cwd)).rejects.toThrow(/must be integrated/);
+    await integrateWorker(cwd);
+    await advanceSdd(cwd);
+    expect((await git.lastCommit()).trailers.phase).toBe("implement");
+  });
+
+  it("rejects orchestrator commits, even with forged task trailers", async () => {
+    const { cwd, git } = await repository();
+    await delegatedAtImplement(cwd);
+    await integrateWorker(cwd);
+    await writeFile(join(cwd, "forged.ts"), "// orchestrator wrote this\n");
+    await git.commit(["forged.ts"], "feat: forged", { work: "deleg", task: "api" });
+    await expect(advanceSdd(cwd)).rejects.toThrow(/"feat: forged" was not integrated from a task/);
+  });
+
+  it("clears execution when downgrading", async () => {
+    const { cwd } = await repository();
+    await startSdd(cwd, "deleg", "autonomous", "delegated");
+    for (const phase of ["intake", "explore"]) {
+      await fillPhase(cwd, "deleg", phase);
+      await advanceSdd(cwd);
+    }
+    await fillPhase(cwd, "deleg", "assess");
+    const { downgradeSdd } = await import("../src/work/sdd.js");
+    await downgradeSdd(cwd, "quick");
+    expect((await loadState(cwd))?.execution).toBeUndefined();
   });
 });
 

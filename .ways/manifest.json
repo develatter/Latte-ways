@@ -1,7 +1,7 @@
 {
   "schemaVersion": 1,
   "harnessVersion": "0.1.0",
-  "generatedAt": "2026-09-02T10:55:47.021Z",
+  "generatedAt": "2026-09-02T11:00:54.380Z",
   "managedFiles": {
     "AGENTS.md": "11c77d328aefb52c308c28d1acccef1527a70557be147385d2ed71bf4b0ad21d",
     "MAP.md": "c31b9da576f1368018bd9226d37f6db3e7432fbeed616809f8dae543ffef3f20",
@@ -22,7 +22,7 @@
       ".claude/agents/ways-reviewer.md": "9d0c77fe48fa03586e748e2051ee57bf3e1afde84ddb2a22699ab8854139bf22",
       ".claude/agents/ways-sweeper.md": "28ffd32f1adf4797e680cb4dc1b6612fa55963bc6faead686ef5a2e2f8fe25a5",
       ".claude/ways-statusline.sh": "c0e5a41da2a9e1577ad486c50b3dd63fd9bc1aaa530a4c78381dc42917ab1861",
-      ".claude/ways-guard.sh": "c873931c8c169fd850b4ee4cdceae37745f7c9d3c92664d0d81ca8e71a200783"
+      ".claude/ways-guard.sh": "0d55d1c050e73bc2e672ee58cf53fccff0b2e6ac4f31a85790d88e9b7a17e513"
     }
   }
 }

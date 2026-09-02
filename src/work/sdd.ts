@@ -46,12 +46,17 @@ export async function assertSddConsistency(cwd: string, state: WorkState): Promi
   if (await git.parent(commit.hash) !== state.gateCommit) throw new Error("State gate commit does not match certification parent; run ways repair");
 }
 
-/** In delegated execution every implementation commit must come from an integrated task. */
+/**
+ * In delegated execution every implementation commit must be one recorded by
+ * `task integrate`; trailers alone prove nothing because anyone can write them.
+ */
 async function assertDelegatedImplementation(cwd: string, state: WorkState): Promise<void> {
   if (state.tasks.length === 0) throw new Error("Delegated execution requires at least one task; declare tasks during decompose");
+  const integrated = new Set(state.tasks.flatMap((task) => task.commits));
   const git = new GitRepository(cwd);
   for (const commit of await commitsAfter(git, state.gateCommit)) {
-    if (commit.trailers.work === state.id && commit.trailers.task) continue;
+    const certification = commit.trailers.work === state.id && commit.trailers.state === "completed" && commit.trailers.phase === state.lastCompletedPhase;
+    if (certification || integrated.has(commit.hash)) continue;
     throw new Error(`Commit ${commit.hash.slice(0, 12)} "${commit.subject}" was not integrated from a task; the orchestrator must not implement in delegated execution`);
   }
 }
@@ -158,6 +163,7 @@ export async function downgradeSdd(cwd: string, target: "quick" | "plan"): Promi
   delete state.phase;
   delete state.lastCompletedPhase;
   delete state.profile;
+  delete state.execution;
   if (target === "plan") {
     state.planPath = `${PLAN_DIR}/${state.id}.md`;
     await writeAtomic(join(cwd, state.planPath), `---\ntype: plan\nstatus: proposed\nwork: ${state.id}\n---\n\n# Goal\n\n# Plan\n\n1. \n`);

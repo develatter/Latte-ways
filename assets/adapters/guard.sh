@@ -19,7 +19,9 @@ process.stdin.on("data", (chunk) => { data += chunk; }).on("end", () => {
   const { execFileSync } = require("node:child_process");
   const { existsSync, readFileSync } = require("node:fs");
   const { dirname, resolve } = require("node:path");
-  const target = edits && typeof event.tool_input?.file_path === "string" ? dirname(resolve(String(event.cwd ?? process.cwd()), event.tool_input.file_path)) : String(event.cwd ?? process.cwd());
+  const edited = event.tool_input?.file_path ?? event.tool_input?.notebook_path;
+  let target = edits && typeof edited === "string" ? dirname(resolve(String(event.cwd ?? process.cwd()), edited)) : String(event.cwd ?? process.cwd());
+  while (!existsSync(target) && dirname(target) !== target) target = dirname(target);
   let root;
   try { root = execFileSync("git", ["rev-parse", "--show-toplevel"], { cwd: target, encoding: "utf8", stdio: ["ignore", "pipe", "ignore"] }).trim(); } catch { process.exit(0); }
   const file = `${root}/.ways/status.json`;

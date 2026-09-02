@@ -195,10 +195,13 @@ describe("adapter installation", () => {
       tasks: [{ id: "api", title: "Build API", status: "ready", dependsOn: [], commits: [] }],
     });
     expect(run(edit(cwd))).toBe(2);
+    expect(run({ tool_name: "Write", tool_input: { file_path: join(cwd, "new", "deep", "file.ts") }, cwd })).toBe(2);
+    expect(run({ tool_name: "NotebookEdit", tool_input: { notebook_path: join(cwd, "n.ipynb") }, cwd })).toBe(2);
     expect(run({ tool_name: "Read", tool_input: { file_path: join(cwd, "src.ts") }, cwd })).toBe(0);
     await git.commit(await git.changedPaths(), "sdd(decompose): complete deleg", { work: "deleg", phase: "decompose", state: "completed" });
     const task = await prepareTask(cwd, "api");
     expect(run(edit(task.worktree!))).toBe(0);
+    expect(run({ tool_name: "NotebookEdit", tool_input: { notebook_path: join(task.worktree!, "n.ipynb") }, cwd })).toBe(0);
     const statusline = execFileSync("sh", [join(cwd, ".claude/ways-statusline.sh")], { cwd, input: JSON.stringify({ workspace: { project_dir: cwd } }), encoding: "utf8" });
     expect(statusline).toBe("ways: sdd:deleg @implement [autonomous] delegated");
   });
