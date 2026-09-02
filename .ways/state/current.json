@@ -2,12 +2,14 @@
   "schemaVersion": 1,
   "harnessVersion": "0.1.0",
   "id": "claude-adapter",
-  "mode": "plan",
+  "mode": "sdd",
   "status": "active",
-  "baseCommit": "e47edfa7b4bf644e8d854029eec04ffffa79a6b6",
-  "gateCommit": "e47edfa7b4bf644e8d854029eec04ffffa79a6b6",
+  "baseCommit": "6bef0732c4aec0a21462527ee8fcd73d29f6aca9",
+  "gateCommit": "6bef0732c4aec0a21462527ee8fcd73d29f6aca9",
   "createdAt": "2026-09-02T09:06:45.920Z",
-  "updatedAt": "2026-09-02T09:06:45.920Z",
-  "planPath": ".ways/plans/claude-adapter.md",
-  "tasks": []
+  "updatedAt": "2026-09-02T09:08:36.313Z",
+  "tasks": [],
+  "profile": "autonomous",
+  "phase": "explore",
+  "lastCompletedPhase": "intake"
 }

@@ -1,9 +1,12 @@
 {
   "schemaVersion": 1,
   "active": true,
-  "mode": "plan",
+  "mode": "sdd",
   "id": "claude-adapter",
   "status": "active",
-  "gateCommit": "e47edfa7b4bf644e8d854029eec04ffffa79a6b6",
-  "updatedAt": "2026-09-02T09:06:45.920Z"
+  "gateCommit": "6bef0732c4aec0a21462527ee8fcd73d29f6aca9",
+  "updatedAt": "2026-09-02T09:08:36.313Z",
+  "phase": "explore",
+  "humanGate": false,
+  "profile": "autonomous"
 }
