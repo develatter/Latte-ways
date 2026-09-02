@@ -5,11 +5,11 @@
   "mode": "sdd",
   "status": "active",
   "baseCommit": "580562f863374bac5dc749581202f0db449d3db4",
-  "gateCommit": "580562f863374bac5dc749581202f0db449d3db4",
+  "gateCommit": "4f0ee32a2b26569be65de5c8a091d910e2b1e66f",
   "createdAt": "2026-09-02T08:43:55.920Z",
-  "updatedAt": "2026-09-02T08:45:00.925Z",
+  "updatedAt": "2026-09-02T08:46:33.403Z",
   "tasks": [],
   "profile": "autonomous",
-  "phase": "explore",
-  "lastCompletedPhase": "intake"
+  "phase": "assess",
+  "lastCompletedPhase": "explore"
 }

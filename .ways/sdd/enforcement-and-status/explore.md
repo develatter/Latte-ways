@@ -1,6 +1,6 @@
 # explore
 
-Goal:
-Evidence:
-Decision:
-Gate:
+Goal: Locate every seam the plan touches and the constraints that shape hooks and history checks.
+Evidence: All state writes pass through src/state/store.ts (saveState/removeState), a single point to derive status.json. current.json is tracked and committed with each gate; closing flows (quick finish, plan finish/abandon, sdd close) remove state before committing, so a commit-msg hook must fall back to HEAD:.ways/state/current.json. Trailers are parsed in src/git/git.ts (Harness-Work/Phase/State/Task). Managed files and hashes come from MANAGED_ASSETS in src/bootstrap/bootstrap.ts; upgrade compares those hashes. scripts/check.sh already resolves dist/cli.js or npx --no-install ways, a pattern hooks can mirror. Task worktrees live under .ways/worktrees (gitignored) and their commits carry Harness-Work + Harness-Task, so a relative core.hooksPath works there. Pre-harness commits in this repo carry no trailers, so history verification needs an anchor: the commit that introduced .ways/manifest.json plus an optional config historySince. Tests create repositories with manual commits before and right after bootstrap; the first commit introducing the manifest must stay exempt.
+Decision: Derive status.json inside store.ts; validate the hook against disk state first and HEAD state second; anchor history checks at manifest introduction or config.historySince; install hooks as managed files with core.hooksPath=.ways/hooks; tests need dist built because hooks execute the CLI.
+Gate: Proceed to assess.
