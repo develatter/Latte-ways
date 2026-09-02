@@ -1,0 +1,13 @@
+{
+  "schemaVersion": 1,
+  "harnessVersion": "0.1.0",
+  "id": "enforcement-and-status",
+  "mode": "plan",
+  "status": "active",
+  "baseCommit": "c1025e0bd2efcb52364e26825252f92012a242d3",
+  "gateCommit": "c1025e0bd2efcb52364e26825252f92012a242d3",
+  "createdAt": "2026-09-02T08:43:55.920Z",
+  "updatedAt": "2026-09-02T08:43:55.920Z",
+  "planPath": ".ways/plans/enforcement-and-status.md",
+  "tasks": []
+}
