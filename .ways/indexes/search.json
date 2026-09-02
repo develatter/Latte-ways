@@ -129,11 +129,17 @@
     "ci": [
       "conventions/mechanical-enforcement"
     ],
+    "claude": [
+      "conventions/provider-adapters"
+    ],
     "closing": [
       "conventions/mechanical-enforcement"
     ],
     "code": [
       "conventions/mechanical-enforcement"
+    ],
+    "codex": [
+      "conventions/provider-adapters"
     ],
     "command": [
       "conventions/provider-adapters"
@@ -162,6 +168,9 @@
     ],
     "copy": [
       "conventions/mechanical-enforcement"
+    ],
+    "cursor": [
+      "conventions/provider-adapters"
     ],
     "decides": [
       "conventions/mechanical-enforcement"
@@ -203,8 +212,7 @@
       "conventions/mechanical-enforcement"
     ],
     "every": [
-      "conventions/mechanical-enforcement",
-      "conventions/provider-adapters"
+      "conventions/mechanical-enforcement"
     ],
     "everything": [
       "conventions/provider-adapters"
@@ -213,6 +221,9 @@
       "conventions/mechanical-enforcement"
     ],
     "explorer": [
+      "conventions/provider-adapters"
+    ],
+    "extension": [
       "conventions/provider-adapters"
     ],
     "file": [
@@ -318,7 +329,8 @@
       "conventions/provider-adapters"
     ],
     "its": [
-      "conventions/mechanical-enforcement"
+      "conventions/mechanical-enforcement",
+      "conventions/provider-adapters"
     ],
     "json": [
       "conventions/mechanical-enforcement"
@@ -333,6 +345,9 @@
       "conventions/provider-adapters"
     ],
     "lines": [
+      "conventions/provider-adapters"
+    ],
+    "live": [
       "conventions/provider-adapters"
     ],
     "lives": [
@@ -444,6 +459,9 @@
     "phase": [
       "conventions/mechanical-enforcement"
     ],
+    "pi": [
+      "conventions/provider-adapters"
+    ],
     "placeholders": [
       "conventions/provider-adapters"
     ],
@@ -502,9 +520,6 @@
     "recorded": [
       "conventions/mechanical-enforcement"
     ],
-    "registered": [
-      "conventions/provider-adapters"
-    ],
     "rejects": [
       "conventions/mechanical-enforcement",
       "conventions/provider-adapters"
@@ -519,6 +534,9 @@
       "conventions/provider-adapters"
     ],
     "renders": [
+      "conventions/provider-adapters"
+    ],
+    "repository": [
       "conventions/provider-adapters"
     ],
     "resolves": [
@@ -571,6 +589,9 @@
     "six": [
       "conventions/provider-adapters"
     ],
+    "skills": [
+      "conventions/provider-adapters"
+    ],
     "skipping": [
       "conventions/mechanical-enforcement"
     ],
@@ -587,7 +608,8 @@
       "conventions/mechanical-enforcement"
     ],
     "status": [
-      "conventions/mechanical-enforcement"
+      "conventions/mechanical-enforcement",
+      "conventions/provider-adapters"
     ],
     "statusline": [
       "conventions/mechanical-enforcement",
