@@ -1,0 +1,15 @@
+{
+  "schemaVersion": 1,
+  "harnessVersion": "0.1.0",
+  "id": "human-approvals",
+  "mode": "sdd",
+  "status": "active",
+  "profile": "autonomous",
+  "phase": "explore",
+  "baseCommit": "fc5923c24612983137580bc6996fb35f8672559e",
+  "gateCommit": "fc5923c24612983137580bc6996fb35f8672559e",
+  "createdAt": "2026-09-02T11:11:40.773Z",
+  "updatedAt": "2026-09-02T11:12:06.847Z",
+  "tasks": [],
+  "lastCompletedPhase": "intake"
+}
