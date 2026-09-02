@@ -4,9 +4,9 @@
   "mode": "sdd",
   "id": "delegated-execution",
   "status": "active",
-  "gateCommit": "92ed986f01ef50eb753515346acdaf1dca3be405",
-  "updatedAt": "2026-09-02T10:54:08.846Z",
-  "phase": "explore",
+  "gateCommit": "ba89ecce4618a5ad82b419d4448b27ae781e780e",
+  "updatedAt": "2026-09-02T10:54:09.420Z",
+  "phase": "assess",
   "humanGate": false,
   "profile": "autonomous"
 }
