@@ -2,7 +2,7 @@ import { chmod, lstat, mkdir, readFile, realpath, symlink } from "node:fs/promis
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { HARNESS_VERSION } from "../index.js";
-import { CONFIG_PATH, HOOKS_DIR, INDEX_DIR, KNOWLEDGE_DIR, MANIFEST_PATH, PLAN_DIR, SDD_DIR, STATE_PATH, WAYS_DIR } from "../domain/constants.js";
+import { CONFIG_PATH, HOOKS_DIR, KNOWLEDGE_DIR, MANIFEST_PATH, PLAN_DIR, SDD_DIR, STATE_PATH, WAYS_DIR } from "../domain/constants.js";
 import type { HarnessConfig, ManagedManifest } from "../domain/types.js";
 import { sha256, stableJson, writeAtomic } from "../fs/files.js";
 import { GitRepository } from "../git/git.js";
@@ -62,7 +62,6 @@ export async function bootstrap(options: BootstrapOptions): Promise<ManagedManif
     mkdir(join(root, dirname(STATE_PATH)), { recursive: true }),
     mkdir(join(root, PLAN_DIR), { recursive: true }),
     mkdir(join(root, SDD_DIR), { recursive: true }),
-    mkdir(join(root, INDEX_DIR), { recursive: true }),
     mkdir(join(root, KNOWLEDGE_DIR), { recursive: true }),
   ]);
 
@@ -100,9 +99,6 @@ export async function bootstrap(options: BootstrapOptions): Promise<ManagedManif
     managedFiles,
   };
   await writeAtomic(join(root, MANIFEST_PATH), stableJson(manifest));
-  await writeAtomic(join(root, `${INDEX_DIR}/catalog.json`), stableJson({ schemaVersion: 1, documents: [] }));
-  await writeAtomic(join(root, `${INDEX_DIR}/graph.json`), stableJson({ schemaVersion: 1, edges: [] }));
-  await writeAtomic(join(root, `${INDEX_DIR}/search.json`), stableJson({ schemaVersion: 1, terms: {} }));
 
   if (options.adapters ?? true) {
     await installAllAdapters(root, force);

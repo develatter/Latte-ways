@@ -25,6 +25,8 @@ describe("bootstrap", () => {
     expect(await readFile(join(cwd, "scripts/check.sh"), "utf8")).toContain("ways check");
     expect(manifest.managedFiles["AGENTS.md"]).toMatch(/^[a-f0-9]{64}$/);
     expect(JSON.parse(await readFile(join(cwd, ".ways/config.json"), "utf8")).testCommand).toEqual(["npm", "test"]);
+    expect(await readFile(join(cwd, ".ways/.gitignore"), "utf8")).toContain("indexes/");
+    await expect(readFile(join(cwd, ".ways/indexes/search.json"), "utf8")).rejects.toMatchObject({ code: "ENOENT" });
   });
 
   it("does not silently overwrite managed files", async () => {

@@ -10,7 +10,7 @@ import { checkHistory } from "./integrity/history.js";
 import { HARNESS_NAME, HARNESS_VERSION } from "./index.js";
 import { writeIndexes } from "./knowledge/indexes.js";
 import { inspectOkf } from "./knowledge/okf.js";
-import { queryKnowledge } from "./query/query.js";
+import { queryKnowledgeResult } from "./query/query.js";
 import { adoptHead, diagnose, restoreStateFromHead, rollbackToLastGate } from "./repair/repair.js";
 import { projectStatus, readStatus, statusMatches } from "./state/status.js";
 import { loadState } from "./state/store.js";
@@ -251,8 +251,12 @@ export async function run(argv: readonly string[], cwd = process.cwd()): Promise
   if (command === "query") {
     const query = args.join(" ").trim();
     if (!query) throw new Error("Usage: ways query <terms>");
-    const hits = await queryKnowledge(cwd, query);
-    for (const hit of hits) console.log(`${hit.score}\t${hit.path}\t${hit.preview}`);
+    const result = await queryKnowledgeResult(cwd, query);
+    for (const warning of result.warnings) console.error(`warning: ${warning}`);
+    for (const hit of result.hits) {
+      const labels = hit.labels.length > 0 ? ` [${hit.labels.join(", ")}]` : "";
+      console.log(`${hit.score}\t${hit.path}${labels}\t${hit.preview}`);
+    }
     return 0;
   }
 
