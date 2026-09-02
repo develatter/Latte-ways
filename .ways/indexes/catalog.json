@@ -17,8 +17,8 @@
       "type": "convention",
       "title": "provider-adapters",
       "description": "",
-      "status": "draft",
-      "trust": "unverified",
+      "status": "stable",
+      "trust": "human-reviewed",
       "tags": []
     }
   ]
