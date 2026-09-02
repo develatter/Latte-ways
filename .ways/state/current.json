@@ -5,11 +5,11 @@
   "mode": "sdd",
   "status": "active",
   "baseCommit": "580562f863374bac5dc749581202f0db449d3db4",
-  "gateCommit": "2373da01ad586c582056392c8fbe2dc01b6794c6",
+  "gateCommit": "3df5488b36cb29de239db75f341636ce196b21f8",
   "createdAt": "2026-09-02T08:43:55.920Z",
-  "updatedAt": "2026-09-02T08:47:09.021Z",
+  "updatedAt": "2026-09-02T08:47:09.316Z",
   "tasks": [],
   "profile": "autonomous",
-  "phase": "plan",
-  "lastCompletedPhase": "specify"
+  "phase": "decompose",
+  "lastCompletedPhase": "plan"
 }
