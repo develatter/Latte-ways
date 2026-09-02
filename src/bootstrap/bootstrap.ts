@@ -8,6 +8,7 @@ import { sha256, stableJson, writeAtomic } from "../fs/files.js";
 import { GitRepository } from "../git/git.js";
 import { installAllAdapters } from "../adapters/install.js";
 import { writeStatus } from "../state/status.js";
+import { requestDiscovery } from "../memory/workflow.js";
 
 export interface BootstrapOptions {
   cwd: string;
@@ -99,6 +100,10 @@ export async function bootstrap(options: BootstrapOptions): Promise<ManagedManif
     managedFiles,
   };
   await writeAtomic(join(root, MANIFEST_PATH), stableJson(manifest));
+
+  // Bootstrap is intentionally not a silent assertion that memory is current.
+  // It always leaves a review-required discovery, even for an empty repository.
+  await requestDiscovery(root);
 
   if (options.adapters ?? true) {
     await installAllAdapters(root, force);

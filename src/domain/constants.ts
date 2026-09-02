@@ -4,6 +4,7 @@ export const MANIFEST_PATH = `${WAYS_DIR}/manifest.json`;
 export const STATE_PATH = `${WAYS_DIR}/state/current.json`;
 export const KNOWLEDGE_DIR = `${WAYS_DIR}/knowledge`;
 export const INDEX_DIR = `${WAYS_DIR}/indexes`;
+export const MEMORY_DIR = `${WAYS_DIR}/memory`;
 export const PLAN_DIR = `${WAYS_DIR}/plans`;
 export const SDD_DIR = `${WAYS_DIR}/sdd`;
 export const STATUS_PATH = `${WAYS_DIR}/status.json`;

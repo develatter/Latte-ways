@@ -8,6 +8,10 @@ export interface CommitTrailers {
   phase?: string;
   state?: string;
   task?: string;
+  /** Full motivating implementation range for a separate semantic-memory commit. */
+  implementation?: string;
+  /** Digest independently reviewed before a semantic-memory commit. */
+  memoryReviewDigest?: string;
 }
 
 export interface CommitInfo {
@@ -185,6 +189,8 @@ export function parseTrailers(body: string): CommitTrailers {
     "Harness-Phase": "phase",
     "Harness-State": "state",
     "Harness-Task": "task",
+    "Memory-Implementation": "implementation",
+    "Memory-Review-Digest": "memoryReviewDigest",
   };
 
   for (const line of body.split("\n")) {
@@ -203,6 +209,8 @@ export function formatTrailers(trailers: CommitTrailers): string {
     ["Harness-Phase", trailers.phase],
     ["Harness-State", trailers.state],
     ["Harness-Task", trailers.task],
+    ["Memory-Implementation", trailers.implementation],
+    ["Memory-Review-Digest", trailers.memoryReviewDigest],
   ];
   return entries.filter((entry): entry is [string, string] => Boolean(entry[1])).map(([key, value]) => `${key}: ${value}`).join("\n");
 }

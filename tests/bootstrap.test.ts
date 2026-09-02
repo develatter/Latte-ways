@@ -26,6 +26,7 @@ describe("bootstrap", () => {
     expect(manifest.managedFiles["AGENTS.md"]).toMatch(/^[a-f0-9]{64}$/);
     expect(JSON.parse(await readFile(join(cwd, ".ways/config.json"), "utf8")).testCommand).toEqual(["npm", "test"]);
     expect(await readFile(join(cwd, ".ways/.gitignore"), "utf8")).toContain("indexes/");
+    expect(JSON.parse(await readFile(join(cwd, ".ways/memory/discovery.json"), "utf8"))).toMatchObject({ kind: "bootstrap", status: "review-required" });
     await expect(readFile(join(cwd, ".ways/indexes/search.json"), "utf8")).rejects.toMatchObject({ code: "ENOENT" });
   });
 
