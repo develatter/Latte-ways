@@ -1,4 +1,251 @@
 {
   "schemaVersion": 1,
-  "terms": {}
+  "terms": {
+    "--history": [
+      "conventions/mechanical-enforcement"
+    ],
+    "--no-verify": [
+      "conventions/mechanical-enforcement"
+    ],
+    "active": [
+      "conventions/mechanical-enforcement"
+    ],
+    "after": [
+      "conventions/mechanical-enforcement"
+    ],
+    "agent": [
+      "conventions/mechanical-enforcement"
+    ],
+    "an": [
+      "conventions/mechanical-enforcement"
+    ],
+    "anchor": [
+      "conventions/mechanical-enforcement"
+    ],
+    "and": [
+      "conventions/mechanical-enforcement"
+    ],
+    "any": [
+      "conventions/mechanical-enforcement"
+    ],
+    "at": [
+      "conventions/mechanical-enforcement"
+    ],
+    "audits": [
+      "conventions/mechanical-enforcement"
+    ],
+    "by": [
+      "conventions/mechanical-enforcement"
+    ],
+    "caught": [
+      "conventions/mechanical-enforcement"
+    ],
+    "ceremony": [
+      "conventions/mechanical-enforcement"
+    ],
+    "certification": [
+      "conventions/mechanical-enforcement"
+    ],
+    "chains": [
+      "conventions/mechanical-enforcement"
+    ],
+    "change": [
+      "conventions/mechanical-enforcement"
+    ],
+    "check": [
+      "conventions/mechanical-enforcement"
+    ],
+    "choosing": [
+      "conventions/mechanical-enforcement"
+    ],
+    "ci": [
+      "conventions/mechanical-enforcement"
+    ],
+    "closing": [
+      "conventions/mechanical-enforcement"
+    ],
+    "commit": [
+      "conventions/mechanical-enforcement"
+    ],
+    "commit-msg": [
+      "conventions/mechanical-enforcement"
+    ],
+    "commits": [
+      "conventions/mechanical-enforcement"
+    ],
+    "compliance": [
+      "conventions/mechanical-enforcement"
+    ],
+    "conventions": [
+      "conventions/mechanical-enforcement"
+    ],
+    "deletion": [
+      "conventions/mechanical-enforcement"
+    ],
+    "depends": [
+      "conventions/mechanical-enforcement"
+    ],
+    "derived": [
+      "conventions/mechanical-enforcement"
+    ],
+    "enforcement": [
+      "conventions/mechanical-enforcement"
+    ],
+    "every": [
+      "conventions/mechanical-enforcement"
+    ],
+    "file": [
+      "conventions/mechanical-enforcement"
+    ],
+    "flexible": [
+      "conventions/mechanical-enforcement"
+    ],
+    "for": [
+      "conventions/mechanical-enforcement"
+    ],
+    "harness-state": [
+      "conventions/mechanical-enforcement"
+    ],
+    "harness-task": [
+      "conventions/mechanical-enforcement"
+    ],
+    "harness-work": [
+      "conventions/mechanical-enforcement"
+    ],
+    "hook": [
+      "conventions/mechanical-enforcement"
+    ],
+    "integrity": [
+      "conventions/mechanical-enforcement"
+    ],
+    "is": [
+      "conventions/mechanical-enforcement"
+    ],
+    "it": [
+      "conventions/mechanical-enforcement"
+    ],
+    "its": [
+      "conventions/mechanical-enforcement"
+    ],
+    "json": [
+      "conventions/mechanical-enforcement"
+    ],
+    "later": [
+      "conventions/mechanical-enforcement"
+    ],
+    "layers": [
+      "conventions/mechanical-enforcement"
+    ],
+    "make": [
+      "conventions/mechanical-enforcement"
+    ],
+    "managed": [
+      "conventions/mechanical-enforcement"
+    ],
+    "means": [
+      "conventions/mechanical-enforcement"
+    ],
+    "mechanical": [
+      "conventions/mechanical-enforcement"
+    ],
+    "mechanical-enforcement": [
+      "conventions/mechanical-enforcement"
+    ],
+    "minimum": [
+      "conventions/mechanical-enforcement"
+    ],
+    "must": [
+      "conventions/mechanical-enforcement"
+    ],
+    "never": [
+      "conventions/mechanical-enforcement"
+    ],
+    "not": [
+      "conventions/mechanical-enforcement"
+    ],
+    "obeying": [
+      "conventions/mechanical-enforcement"
+    ],
+    "of": [
+      "conventions/mechanical-enforcement"
+    ],
+    "on": [
+      "conventions/mechanical-enforcement"
+    ],
+    "opens": [
+      "conventions/mechanical-enforcement"
+    ],
+    "or": [
+      "conventions/mechanical-enforcement"
+    ],
+    "plan": [
+      "conventions/mechanical-enforcement"
+    ],
+    "plus": [
+      "conventions/mechanical-enforcement"
+    ],
+    "projection": [
+      "conventions/mechanical-enforcement"
+    ],
+    "prompt": [
+      "conventions/mechanical-enforcement"
+    ],
+    "quick": [
+      "conventions/mechanical-enforcement"
+    ],
+    "readable": [
+      "conventions/mechanical-enforcement"
+    ],
+    "rejects": [
+      "conventions/mechanical-enforcement"
+    ],
+    "runs": [
+      "conventions/mechanical-enforcement"
+    ],
+    "sdd": [
+      "conventions/mechanical-enforcement"
+    ],
+    "skipping": [
+      "conventions/mechanical-enforcement"
+    ],
+    "so": [
+      "conventions/mechanical-enforcement"
+    ],
+    "stage": [
+      "conventions/mechanical-enforcement"
+    ],
+    "state": [
+      "conventions/mechanical-enforcement"
+    ],
+    "status": [
+      "conventions/mechanical-enforcement"
+    ],
+    "statusline": [
+      "conventions/mechanical-enforcement"
+    ],
+    "the": [
+      "conventions/mechanical-enforcement"
+    ],
+    "three": [
+      "conventions/mechanical-enforcement"
+    ],
+    "to": [
+      "conventions/mechanical-enforcement"
+    ],
+    "traced": [
+      "conventions/mechanical-enforcement"
+    ],
+    "verified": [
+      "conventions/mechanical-enforcement"
+    ],
+    "verifies": [
+      "conventions/mechanical-enforcement"
+    ],
+    "ways": [
+      "conventions/mechanical-enforcement"
+    ],
+    "work": [
+      "conventions/mechanical-enforcement"
+    ]
+  }
 }

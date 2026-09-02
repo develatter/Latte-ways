@@ -4,9 +4,9 @@
   "mode": "sdd",
   "id": "enforcement-and-status",
   "status": "active",
-  "gateCommit": "283f695fed0376e8b2070f86d42a3ba23f39ee02",
-  "updatedAt": "2026-09-02T09:02:43.224Z",
-  "phase": "reconcile-memory",
+  "gateCommit": "7f5d910970aebf94a6edd7f614a602a86efee9c0",
+  "updatedAt": "2026-09-02T09:03:08.175Z",
+  "phase": "close",
   "humanGate": false,
   "profile": "autonomous"
 }
