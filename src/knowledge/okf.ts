@@ -2,6 +2,7 @@ import { lstat, readdir, readFile } from "node:fs/promises";
 import { dirname, join, normalize, relative, resolve } from "node:path";
 import { parse } from "yaml";
 import { KNOWLEDGE_DIR } from "../domain/constants.js";
+import { validateSources } from "../memory/validation.js";
 
 export interface OkfDocument {
   id: string;
@@ -68,7 +69,7 @@ async function targetExists(root: string, documentPath: string, target: string):
   }
 }
 
-export async function inspectOkf(cwd: string): Promise<{ documents: OkfDocument[]; issues: OkfIssue[] }> {
+export async function inspectOkf(cwd: string, options: { validateSources?: boolean } = {}): Promise<{ documents: OkfDocument[]; issues: OkfIssue[] }> {
   const root = join(cwd, KNOWLEDGE_DIR);
   const documents: OkfDocument[] = [];
   const issues: OkfIssue[] = [];
@@ -123,6 +124,10 @@ export async function inspectOkf(cwd: string): Promise<{ documents: OkfDocument[
     for (const link of document.links) {
       if (!await targetExists(root, document.path, link)) issues.push({ code: "broken-okf-link", path: relativePath, message: `Missing link target: ${link}` });
     }
+  }
+  if (options.validateSources ?? true) {
+    const active = documents.filter((document) => document.frontmatter.status !== "deprecated" && !document.path.startsWith("deprecated/"));
+    issues.push(...await validateSources(cwd, active));
   }
   return { documents, issues };
 }

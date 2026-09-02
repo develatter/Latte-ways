@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { validateReview, validateState, validationDetails } from "../src/domain/validation.js";
+import { validateConfig, validateReview, validateState, validationDetails } from "../src/domain/validation.js";
 
 const state = {
   schemaVersion: 1,
@@ -29,6 +29,21 @@ describe("contracts", () => {
     const result = validationDetails("state", { ...state, mode: "query" });
     expect(result.valid).toBe(false);
     expect(result.errors.join(" ")).toContain("allowed values");
+  });
+
+  it("accepts strict memory branch and relevant-path configuration", () => {
+    expect(validateConfig({
+      schemaVersion: 1,
+      harnessVersion: "0.1.0",
+      testCommand: ["npm", "test"],
+      memory: {
+        releaseBranch: "main",
+        integrationBranch: "development",
+        reconciliationBranchPattern: "reconcile/*",
+        relevantPaths: ["src/**", "assets/**"],
+        excludedPaths: ["dist/**"],
+      },
+    })).toBe(true);
   });
 
   it("accepts a structured review", () => {

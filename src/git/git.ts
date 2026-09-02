@@ -17,6 +17,13 @@ export interface CommitInfo {
   trailers: CommitTrailers;
 }
 
+export interface GitTreeEntry {
+  mode: string;
+  type: "blob" | "commit";
+  object: string;
+  path: string;
+}
+
 export class GitError extends Error {
   constructor(message: string, readonly stderr = "") {
     super(message);
@@ -41,6 +48,18 @@ export class GitRepository {
     }
   }
 
+  async runBuffer(args: readonly string[]): Promise<Buffer> {
+    return new Promise((resolve, reject) => {
+      execFile("git", [...args], { cwd: this.cwd, encoding: "buffer", maxBuffer: 50 * 1024 * 1024 }, (error, stdout, stderr) => {
+        if (error) {
+          reject(new GitError(error.message, stderr.toString("utf8")));
+          return;
+        }
+        resolve(stdout);
+      });
+    });
+  }
+
   async root(): Promise<string> {
     return this.run(["rev-parse", "--show-toplevel"]);
   }
@@ -51,6 +70,43 @@ export class GitRepository {
 
   async parent(commit = "HEAD"): Promise<string> {
     return this.run(["rev-parse", `${commit}^`]);
+  }
+
+  async resolveRef(ref: string): Promise<string> {
+    return this.run(["rev-parse", "--verify", `${ref}^{commit}`]);
+  }
+
+  async parents(commit = "HEAD"): Promise<string[]> {
+    const fields = (await this.run(["show", "-s", "--format=%P", commit])).split(/\s+/).filter(Boolean);
+    return fields;
+  }
+
+  async isMergeCommit(commit = "HEAD"): Promise<boolean> {
+    return (await this.parents(commit)).length > 1;
+  }
+
+  async mergeBase(left: string, right: string): Promise<string> {
+    return this.run(["merge-base", left, right]);
+  }
+
+  async changedPathsBetween(from: string, to: string): Promise<string[]> {
+    const output = await this.run(["diff", "--name-only", "-z", from, to, "--"]);
+    return output.split("\0").filter(Boolean).sort();
+  }
+
+  async treeEntries(ref = "HEAD"): Promise<GitTreeEntry[]> {
+    const output = await this.run(["ls-tree", "-rz", "--full-tree", "--format=%(objectmode) %(objecttype) %(objectname)%x09%(path)", ref]);
+    const entries: GitTreeEntry[] = [];
+    for (const record of output.split("\0").filter(Boolean)) {
+      const match = record.match(/^(\d+) (blob|commit) ([a-f0-9]+)\t([\s\S]+)$/);
+      if (!match?.[1] || !match[2] || !match[3] || !match[4]) throw new GitError(`Unexpected ls-tree record: ${record}`);
+      entries.push({ mode: match[1], type: match[2] as "blob" | "commit", object: match[3], path: match[4] });
+    }
+    return entries;
+  }
+
+  async objectBytes(object: string): Promise<Buffer> {
+    return this.runBuffer(["cat-file", "-p", object]);
   }
 
   async status(): Promise<string[]> {

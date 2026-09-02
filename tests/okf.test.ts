@@ -2,6 +2,7 @@ import { mkdir, mkdtemp, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
+import { GitRepository } from "../src/git/git.js";
 import { inspectOkf } from "../src/knowledge/okf.js";
 
 async function bundle(content: string): Promise<string> {
@@ -9,6 +10,12 @@ async function bundle(content: string): Promise<string> {
   const dir = join(cwd, ".ways/knowledge/faq");
   await mkdir(dir, { recursive: true });
   await writeFile(join(dir, "item.md"), content);
+  const git = new GitRepository(cwd);
+  await git.run(["init", "-q"]);
+  await git.run(["config", "user.name", "Ways Test"]);
+  await git.run(["config", "user.email", "ways@example.test"]);
+  await git.run(["add", "."]);
+  await git.run(["commit", "-q", "-m", "memory"]);
   return cwd;
 }
 
@@ -24,7 +31,7 @@ describe("OKF", () => {
   });
 
   it("allows agent-authored drafts with provenance", async () => {
-    const cwd = await bundle("---\ntype: faq\nstatus: draft\ngenerated: { by: explorer/v1, at: 2026-01-01T00:00:00Z }\nsources:\n  - resource: /faq/item.md\n---\n\n# Answer\n");
+    const cwd = await bundle("---\ntype: faq\nstatus: draft\ngenerated: { by: explorer/v1, at: 2026-01-01T00:00:00Z }\nsources:\n  - resource: /.ways/knowledge/faq/item.md\n---\n\n# Answer\n");
     expect((await inspectOkf(cwd)).issues).toEqual([]);
   });
 });

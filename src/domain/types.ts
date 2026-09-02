@@ -51,12 +51,21 @@ export interface WorkState {
   tasks: TaskState[];
 }
 
+export interface MemoryConfig {
+  releaseBranch: string;
+  integrationBranch?: string;
+  reconciliationBranchPattern: string;
+  relevantPaths: string[];
+  excludedPaths: string[];
+}
+
 export interface HarnessConfig {
   schemaVersion: 1;
   harnessVersion: string;
   testCommand: string[];
   defaultBranch?: string;
   historySince?: string;
+  memory?: MemoryConfig;
 }
 
 export interface ManagedManifest {
