@@ -2,12 +2,15 @@
   "schemaVersion": 1,
   "harnessVersion": "0.1.0",
   "id": "living-memory",
-  "mode": "plan",
+  "mode": "sdd",
   "status": "active",
-  "baseCommit": "51d3090cba27ba63193dd7769af1ff14d58139c0",
-  "gateCommit": "51d3090cba27ba63193dd7769af1ff14d58139c0",
+  "baseCommit": "712b0292422b54446a99c557d4567c52f43e6464",
+  "gateCommit": "712b0292422b54446a99c557d4567c52f43e6464",
   "createdAt": "2026-09-02T22:41:05.498Z",
-  "updatedAt": "2026-09-02T22:41:05.498Z",
-  "planPath": ".ways/plans/living-memory.md",
-  "tasks": []
+  "updatedAt": "2026-09-02T22:43:09.096Z",
+  "tasks": [],
+  "profile": "autonomous",
+  "execution": "delegated",
+  "phase": "explore",
+  "lastCompletedPhase": "intake"
 }
