@@ -11,13 +11,13 @@ process.stdin.on("data", (chunk) => { data += chunk; }).on("end", () => {
   let event;
   try { event = JSON.parse(data); } catch { process.exit(0); }
   const tool = String(event.tool_name ?? "");
-  const command = String(event.tool_input?.command ?? "");
-  const edits = /^(Edit|Write|MultiEdit|NotebookEdit)$/.test(tool);
+  const command = String(event.tool_input?.command ?? event.command ?? "");
+  const edits = /^(Edit|Write|MultiEdit|NotebookEdit|apply_patch)$/.test(tool);
   const option = "(?:-[^\\s]+\\s+(?:[^-\\s][^\\s]*\\s+)?)*";
   const prefix = "(?:(?:command|exec|builtin)\\s+|[^\\s;&|(`]*/)?";
   const commits = new RegExp("(?:^|[;&|(`\\x22\\x27]\\s*|\\$\\(\\s*)" + prefix + "git\\s+" + option + "commit(?:\\s|$)", "m");
   const evidence = /\.ways\/sdd\/[^\/\s]+\/(approvals|reviews)(\/|$)/;
-  const edited = event.tool_input?.file_path ?? event.tool_input?.notebook_path;
+  const edited = event.tool_input?.file_path ?? event.tool_input?.notebook_path ?? event.tool_input?.path;
   const writes = /(>|\b(tee|cp|mv|rm|ln|dd|touch|install|rsync|python3?|node|perl|ruby)\b|\bsed\b[^|;&]*\s-[a-zA-Z]*i)/;
   if ((edits && typeof edited === "string" && evidence.test(edited)) || (!edits && evidence.test(command) && writes.test(command))) {
     process.stderr.write("ways: approvals and review verdicts are written only by `ways approve` and `ways review submit`\n");

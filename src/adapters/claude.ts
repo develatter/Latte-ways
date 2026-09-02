@@ -1,6 +1,7 @@
 import { readFile } from "node:fs/promises";
 import { join } from "node:path";
 import { stableJson, writeAtomic } from "../fs/files.js";
+import { resolveWith, SLASH_NAMES } from "./render.js";
 import type { AdapterIssue, AdapterSource, MergeResult, ProviderAdapter, RenderedFile } from "./types.js";
 
 export const CLAUDE_DIR = ".claude";
@@ -17,7 +18,7 @@ function frontmatter(entries: Array<[string, string | undefined]>): string {
 
 /** Resolves neutral `{{command:x}}` and `{{role:x}}` placeholders into Claude names. */
 export function resolveNames(text: string): string {
-  return text.replace(/\{\{command:([a-z-]+)\}\}/g, "/ways-$1").replace(/\{\{role:([a-z-]+)\}\}/g, "ways-$1");
+  return resolveWith(text, SLASH_NAMES);
 }
 
 export function renderClaude(source: AdapterSource): RenderedFile[] {

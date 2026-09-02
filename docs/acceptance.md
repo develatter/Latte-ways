@@ -17,3 +17,4 @@
 15. In delegated SDD, the implement gate refuses commits that were not integrated from a task; the orchestrator cannot implement.
 16. A supervised human gate only advances with an approval bound to work, phase, gate commit and content digest; `ways approve` refuses without a TTY, the profile cannot be flipped on disk, and any later edit invalidates the approval.
 17. A review is accepted only with the current diff digest and blocks the gate if the content changes afterwards.
+18. Bootstrap renders Claude, Codex, Cursor and pi adapters; each ships the guard, read-only role markers and merged hook files, and integrity reports a removed guard hook.

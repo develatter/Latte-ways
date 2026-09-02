@@ -5,10 +5,13 @@ import type { ManagedManifest } from "../domain/types.js";
 import { validateManifest } from "../domain/validation.js";
 import { sha256, stableJson, writeAtomic } from "../fs/files.js";
 import { claudeAdapter } from "./claude.js";
+import { codexAdapter } from "./codex.js";
+import { cursorAdapter } from "./cursor.js";
+import { piAdapter } from "./pi.js";
 import { loadAdapterSource } from "./source.js";
 import type { ProviderAdapter, RenderedFile } from "./types.js";
 
-export const PROVIDERS: readonly ProviderAdapter[] = [claudeAdapter];
+export const PROVIDERS: readonly ProviderAdapter[] = [claudeAdapter, codexAdapter, cursorAdapter, piAdapter];
 
 export function providerById(id: string): ProviderAdapter {
   const adapter = PROVIDERS.find((candidate) => candidate.id === id);

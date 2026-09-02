@@ -44,7 +44,7 @@ process.stdin.on("data", (chunk) => { data += chunk; }).on("end", () => {
     process.exit(0);
   }
   if (status.active === false) {
-    process.stderr.write("ways: no active work; open one with /ways-quick, /ways-plan or /ways-sdd before committing\n");
+    process.stderr.write("ways: no active work; open one with $ways-quick, $ways-plan or $ways-sdd before committing\n");
     process.exit(2);
   }
   process.exit(0);

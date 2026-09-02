@@ -211,3 +211,68 @@ describe("adapter installation", () => {
     expect(statusline).toBe("ways: sdd:deleg @implement [autonomous] delegated");
   });
 });
+
+describe("codex, cursor and pi renderers", () => {
+  it("render commands, read-only roles and guards in each provider's documented shape", async () => {
+    const source = await loadAdapterSource();
+    const { renderCodex } = await import("../src/adapters/codex.js");
+    const { renderCursor } = await import("../src/adapters/cursor.js");
+    const { renderPi } = await import("../src/adapters/pi.js");
+    const codex = new Map(renderCodex(source).map((file) => [file.path, file]));
+    expect([...codex.keys()].filter((path) => path.startsWith(".agents/skills/"))).toHaveLength(COMMANDS.length);
+    expect(codex.get(".codex/agents/ways-reviewer.toml")?.content).toContain('sandbox_mode = "read-only"');
+    expect(codex.get(".codex/agents/ways-implementer.toml")?.content).not.toContain("sandbox_mode");
+    expect(codex.get(".agents/skills/ways-plan/SKILL.md")?.content).toContain("$ways-sdd");
+    expect(codex.get(".agents/skills/ways-sdd/SKILL.md")?.content).not.toContain("$ARGUMENTS");
+    expect(codex.get(".codex/ways-guard.sh")?.mode).toBe(0o755);
+    const cursor = new Map(renderCursor(source).map((file) => [file.path, file]));
+    expect(cursor.get(".cursor/skills/ways-quick/SKILL.md")?.content).toContain("disable-model-invocation: true");
+    expect(cursor.get(".cursor/agents/ways-reviewer.md")?.content).toContain("readonly: true");
+    expect(cursor.get(".cursor/agents/ways-qa.md")?.content).not.toContain("readonly");
+    const pi = new Map(renderPi(source).map((file) => [file.path, file]));
+    expect(pi.get(".pi/prompts/ways-sdd.md")?.content).toContain("$ARGUMENTS");
+    expect(pi.get(".pi/prompts/ways-sdd.md")?.content).toContain("argument-hint:");
+    expect(pi.get(".pi/agents/ways-explorer.md")?.content).toContain("tools: read, grep, find, ls");
+    expect(pi.get(".pi/agents/ways-sweeper.md")?.content).not.toContain("tools:");
+    expect(pi.get(".pi/extensions/ways/index.ts")?.content).toContain('pi.on("tool_call"');
+    expect(pi.get(".pi/extensions/ways/index.ts")?.content).toContain("setStatus");
+  });
+
+  it("merges guard hooks into existing hook files idempotently and verifies them", async () => {
+    const { cwd } = await repository();
+    await bootstrap({ cwd, testCommand: [process.execPath, "-e", "process.exit(0)"], adapters: false });
+    const { mkdir } = await import("node:fs/promises");
+    await mkdir(join(cwd, ".codex"), { recursive: true });
+    await writeFile(join(cwd, ".codex/hooks.json"), JSON.stringify({ hooks: { PreToolUse: [{ matcher: "Bash", hooks: [{ type: "command", command: "mine.sh" }] }], Stop: [{ hooks: [] }] } }));
+    await mkdir(join(cwd, ".cursor"), { recursive: true });
+    await writeFile(join(cwd, ".cursor/hooks.json"), JSON.stringify({ version: 1, hooks: { afterFileEdit: [{ command: "./format.sh" }] } }));
+    await installAdapter(cwd, "codex");
+    await installAdapter(cwd, "codex");
+    await installAdapter(cwd, "cursor");
+    await installAdapter(cwd, "cursor");
+    await installAdapter(cwd, "pi");
+    const codex = JSON.parse(await readFile(join(cwd, ".codex/hooks.json"), "utf8"));
+    expect(codex.hooks.PreToolUse.map((group: { matcher: string }) => group.matcher)).toEqual(["Bash", "Bash", "apply_patch|Edit|Write"]);
+    expect(codex.hooks.PreToolUse[0].hooks[0].command).toBe("mine.sh");
+    expect(codex.hooks.Stop).toEqual([{ hooks: [] }]);
+    const cursor = JSON.parse(await readFile(join(cwd, ".cursor/hooks.json"), "utf8"));
+    expect(cursor.version).toBe(1);
+    expect(cursor.hooks.afterFileEdit).toEqual([{ command: "./format.sh" }]);
+    expect(cursor.hooks.beforeShellExecution).toHaveLength(1);
+    expect(cursor.hooks.preToolUse).toEqual([{ command: "./.cursor/ways-guard.sh", matcher: "Write", timeout: 30, failClosed: true }]);
+    expect(await checkIntegrity(cwd)).toEqual([]);
+    await writeFile(join(cwd, ".cursor/hooks.json"), JSON.stringify({ version: 1, hooks: {} }));
+    expect((await checkIntegrity(cwd)).map((issue) => `${issue.code}:${issue.path}`)).toContain("adapter-guard-missing:.cursor/hooks.json");
+    const guard = (script: string, payload: unknown): number => {
+      try {
+        execFileSync("sh", [join(cwd, script)], { cwd, input: JSON.stringify(payload), encoding: "utf8", stdio: ["pipe", "pipe", "pipe"] });
+        return 0;
+      } catch (error) {
+        return (error as { status: number }).status;
+      }
+    };
+    expect(guard(".cursor/ways-guard.sh", { command: "git commit -m x", cwd })).toBe(2);
+    expect(guard(".codex/ways-guard.sh", { tool_name: "Bash", tool_input: { command: "git commit -m x" }, cwd })).toBe(2);
+    expect(guard(".pi/ways-guard.sh", { tool_name: "Bash", tool_input: { command: "git status" }, cwd })).toBe(0);
+  });
+});

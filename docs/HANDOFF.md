@@ -29,10 +29,10 @@ Take latte-ways from a functional MVP to a dogfood-ready harness. Preserve its m
 - Define conflict states and recovery for failed cherry-picks and partial worktree cleanup.
 - Never silently infer progress or discard project changes.
 
-## Priority 2: remaining provider adapters
+## Priority 2: provider adapters (done)
 
-- Claude Code is implemented in `src/adapters/claude.ts` from the canonical source in `assets/adapters/`. Add Codex, Pi, and Cursor as further `ProviderAdapter` entries in `src/adapters/install.ts`; bootstrap already renders every registered provider.
-- Keep adapters as pure renderers plus an idempotent `merge` for shared settings files.
+- Claude, Codex, Cursor and pi are implemented in `src/adapters/` from the canonical source in `assets/adapters/`, following each provider's official documentation as of 2026-09-02 (see the README table). Shared hook files are merged idempotently through `src/adapters/hook-file.ts`.
+- Remaining: the pi extension and the Codex/Cursor hook payloads were written from the documentation, not exercised against the live tools; validate them in a real session of each. Codex and Cursor offer no project-level status output.
 - Keep every role prompt at six non-empty lines or fewer; the loader rejects longer prompts.
 
 ## Priority 3: authentic approvals (done)
@@ -70,7 +70,7 @@ Take latte-ways from a functional MVP to a dogfood-ready harness. Preserve its m
 - Worktree integration has happy-path coverage; conflict recovery needs dedicated states.
 - Memory validation checks structure, trust, freshness, and links but not semantic truth.
 - The search index is generated, while `ways query` still performs a linear scan.
-- No PI, Codex, Claude, or Cursor adapter exists yet by design.
+- Codex, Cursor and pi adapters are rendered from the docs; only the Claude adapter has been used live.
 
 ## Definition of dogfood-ready
 
