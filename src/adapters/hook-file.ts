@@ -26,6 +26,19 @@ export interface HookEntry {
   [key: string]: unknown;
 }
 
+function hookGroups(file: JsonObject): JsonObject {
+  if (file.hooks === undefined) return {};
+  if (!isObject(file.hooks)) throw new Error("hooks must contain a JSON object");
+  return file.hooks;
+}
+
+function eventEntries(hooks: JsonObject, event: string): unknown[] {
+  const entries = hooks[event];
+  if (entries === undefined) return [];
+  if (!Array.isArray(entries)) throw new Error(`hooks.${event} must contain an array`);
+  return entries;
+}
+
 /**
  * Merges harness hook entries into a provider's `hooks.<event>` arrays without
  * touching entries the user owns. `present` decides whether an existing entry
@@ -33,9 +46,9 @@ export interface HookEntry {
  */
 export function mergeHookEntries(file: JsonObject, wanted: Record<string, HookEntry[]>, present: (entry: unknown, wanted: HookEntry) => boolean): JsonObject {
   const next: JsonObject = { ...file };
-  const hooks: JsonObject = isObject(next.hooks) ? { ...next.hooks } : {};
+  const hooks: JsonObject = { ...hookGroups(next) };
   for (const [event, entries] of Object.entries(wanted)) {
-    const existing = Array.isArray(hooks[event]) ? [...(hooks[event] as unknown[])] : [];
+    const existing = [...eventEntries(hooks, event)];
     for (const entry of entries) {
       if (!existing.some((candidate) => present(candidate, entry))) existing.push(entry);
     }
@@ -46,9 +59,9 @@ export function mergeHookEntries(file: JsonObject, wanted: Record<string, HookEn
 }
 
 export function hasHookEntries(file: JsonObject, wanted: Record<string, HookEntry[]>, present: (entry: unknown, wanted: HookEntry) => boolean): boolean {
-  const hooks = isObject(file.hooks) ? file.hooks : {};
+  const hooks = hookGroups(file);
   return Object.entries(wanted).every(([event, entries]) => {
-    const existing = Array.isArray(hooks[event]) ? (hooks[event] as unknown[]) : [];
+    const existing = eventEntries(hooks, event);
     return entries.every((entry) => existing.some((candidate) => present(candidate, entry)));
   });
 }

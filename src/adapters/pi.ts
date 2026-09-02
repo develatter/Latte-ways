@@ -18,15 +18,17 @@ const READ_TOOLS = "read, grep, find, ls";
 
 const EXTENSION = `// Managed by latte-ways. Guard and status line for pi, both backed by the harness scripts.
 import { spawnSync } from "node:child_process";
-import { join } from "node:path";
+import { join, resolve } from "node:path";
+import { fileURLToPath } from "node:url";
 import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
 
 const GUARD = "${GUARD_PATH}";
 const STATUSLINE = "${STATUSLINE_PATH}";
+const ROOT = resolve(fileURLToPath(new URL("../../..", import.meta.url)));
 
 function runScript(script: string, payload: unknown): { code: number; stdout: string; stderr: string } {
-  const result = spawnSync("sh", [join(process.cwd(), script)], { input: JSON.stringify(payload), encoding: "utf8" });
-  return { code: result.status ?? 1, stdout: result.stdout ?? "", stderr: result.stderr ?? "" };
+  const result = spawnSync("sh", [join(ROOT, script)], { input: JSON.stringify(payload), encoding: "utf8" });
+  return { code: result.status ?? 1, stdout: result.stdout ?? "", stderr: result.stderr ?? result.error?.message ?? "" };
 }
 
 export default function (pi: ExtensionAPI) {
@@ -38,7 +40,7 @@ export default function (pi: ExtensionAPI) {
     else if (event.toolName === "edit" || event.toolName === "write" || event.toolName === "multi_edit") payload = { tool_name: "Write", tool_input: { file_path: String(input.path ?? "") }, cwd };
     else return undefined;
     const result = runScript(GUARD, payload);
-    if (result.code === 2) return { block: true, reason: result.stderr.trim() || "blocked by the ways guard" };
+    if (result.code !== 0) return { block: true, reason: result.stderr.trim() || "ways guard failed; blocking tool use" };
     return undefined;
   });
 

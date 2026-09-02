@@ -16,7 +16,11 @@ export function resolveWith(text: string, style: NameStyle): string {
 
 /** Providers whose skills carry no argument placeholder get the arguments spelled out. */
 export function spellArguments(text: string): string {
-  return text.replaceAll("$ARGUMENTS", "the arguments the human gave with this skill");
+  const argumentsText = "the arguments the human gave with this skill";
+  return text.replace(/`([^`]*)\$ARGUMENTS([^`]*)`/g, (_match, before: string, after: string) => {
+    const command = `${before.trimEnd()}${after}`;
+    return command ? `\`${command}\` with ${argumentsText}` : argumentsText;
+  }).replaceAll("$ARGUMENTS", argumentsText);
 }
 
 export function yamlFrontmatter(entries: Array<[string, string | boolean | undefined]>): string {

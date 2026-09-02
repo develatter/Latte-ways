@@ -3,7 +3,7 @@
 # blocks file edits in the main worktree while a delegated SDD implement phase is running,
 # and blocks any tool write to human approvals or review verdicts.
 input="$(cat)"
-case "$input" in *commit*|*Edit*|*Write*|*approvals*|*reviews*) ;; *) exit 0 ;; esac
+case "$input" in *commit*|*Edit*|*Write*|*apply_patch*|*approvals*|*reviews*) ;; *) exit 0 ;; esac
 command -v node >/dev/null 2>&1 || { echo "ways: node not found; refusing to run git commit without the guard" >&2; exit 2; }
 printf '%s' "$input" | exec node -e '
 let data = "";
@@ -18,8 +18,11 @@ process.stdin.on("data", (chunk) => { data += chunk; }).on("end", () => {
   const commits = new RegExp("(?:^|[;&|(`\\x22\\x27]\\s*|\\$\\(\\s*)" + prefix + "git\\s+" + option + "commit(?:\\s|$)", "m");
   const evidence = /\.ways\/sdd\/[^\/\s]+\/(approvals|reviews)(\/|$)/;
   const edited = event.tool_input?.file_path ?? event.tool_input?.notebook_path ?? event.tool_input?.path;
+  const patch = String(event.tool_input?.patch ?? event.tool_input?.input ?? "");
+  const patchPaths = [...patch.matchAll(/^\*\*\* (?:Add|Update|Delete) File: (.+)$|^\*\*\* Move to: (.+)$/gm)].map((match) => match[1] ?? match[2]);
+  const targetPath = typeof edited === "string" ? edited : patchPaths[0];
   const writes = /(>|\b(tee|cp|mv|rm|ln|dd|touch|install|rsync|python3?|node|perl|ruby)\b|\bsed\b[^|;&]*\s-[a-zA-Z]*i)/;
-  if ((edits && typeof edited === "string" && evidence.test(edited)) || (!edits && evidence.test(command) && writes.test(command))) {
+  if ((edits && ((typeof edited === "string" && evidence.test(edited)) || patchPaths.some((path) => evidence.test(path)))) || (!edits && evidence.test(command) && writes.test(command))) {
     process.stderr.write("ways: approvals and review verdicts are written only by `ways approve` and `ways review submit`\n");
     process.exit(2);
   }
@@ -27,7 +30,7 @@ process.stdin.on("data", (chunk) => { data += chunk; }).on("end", () => {
   const { execFileSync } = require("node:child_process");
   const { existsSync, readFileSync } = require("node:fs");
   const { dirname, resolve } = require("node:path");
-  let target = edits && typeof edited === "string" ? dirname(resolve(String(event.cwd ?? process.cwd()), edited)) : String(event.cwd ?? process.cwd());
+  let target = edits && typeof targetPath === "string" ? dirname(resolve(String(event.cwd ?? process.cwd()), targetPath)) : String(event.cwd ?? process.cwd());
   while (!existsSync(target) && dirname(target) !== target) target = dirname(target);
   let root;
   try { root = execFileSync("git", ["rev-parse", "--show-toplevel"], { cwd: target, encoding: "utf8", stdio: ["ignore", "pipe", "ignore"] }).trim(); } catch { process.exit(0); }

@@ -6,4 +6,4 @@ disable-model-invocation: true
 
 Arguments: `<terms>`
 
-Run `npx ways query the arguments the human gave with this skill` and answer from the hits, citing their paths. Treat memory as a lead, then confirm against the code before asserting anything.
+Run `npx ways query` with the arguments the human gave with this skill and answer from the hits, citing their paths. Treat memory as a lead, then confirm against the code before asserting anything.

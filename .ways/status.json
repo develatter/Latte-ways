@@ -4,9 +4,9 @@
   "mode": "sdd",
   "id": "provider-adapters",
   "status": "active",
-  "gateCommit": "554a0f16f8510d6b334e09d5333588ddc595a48c",
-  "updatedAt": "2026-09-02T11:45:20.428Z",
-  "phase": "review",
+  "gateCommit": "a5fb51120c171d0f757e5f4b3c203893dbbbd244",
+  "updatedAt": "2026-09-02T11:56:20.230Z",
+  "phase": "validate",
   "humanGate": false,
   "profile": "autonomous"
 }
