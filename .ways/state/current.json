@@ -5,12 +5,66 @@
   "mode": "sdd",
   "status": "active",
   "baseCommit": "712b0292422b54446a99c557d4567c52f43e6464",
-  "gateCommit": "6e7019b76062cd14d1829f81b25a1d993c6da6be",
+  "gateCommit": "06c653835bd099cd535c67ad47fe6f7252d41add",
   "createdAt": "2026-09-02T22:41:05.498Z",
-  "updatedAt": "2026-09-02T22:47:09.956Z",
-  "tasks": [],
+  "updatedAt": "2026-09-02T22:47:38.836Z",
+  "tasks": [
+    {
+      "id": "memory-core",
+      "title": "Define memory model, source coverage validation, config, canonical code-tree digest, and Git primitives",
+      "status": "ready",
+      "dependsOn": [],
+      "commits": []
+    },
+    {
+      "id": "index-cache",
+      "title": "Make indexes untracked lazy deterministic caches and query consume them",
+      "status": "ready",
+      "dependsOn": [],
+      "commits": []
+    },
+    {
+      "id": "incremental-memory",
+      "title": "Implement mandatory bootstrap discovery and separate incremental memory commit/review workflow",
+      "status": "pending",
+      "dependsOn": [
+        "memory-core",
+        "index-cache"
+      ],
+      "commits": []
+    },
+    {
+      "id": "release-reconcile",
+      "title": "Implement release reconciliation generations, evidence, candidate validation, and merge topology",
+      "status": "pending",
+      "dependsOn": [
+        "memory-core"
+      ],
+      "commits": []
+    },
+    {
+      "id": "adapters-migration",
+      "title": "Integrate CLI, migration, bootstrap templates, and generated provider adapters",
+      "status": "pending",
+      "dependsOn": [
+        "index-cache",
+        "incremental-memory",
+        "release-reconcile"
+      ],
+      "commits": []
+    },
+    {
+      "id": "baseline-e2e",
+      "title": "Create repository baseline and complete CI, packed-consumer, sync, and adversarial end-to-end coverage",
+      "status": "pending",
+      "dependsOn": [
+        "adapters-migration"
+      ],
+      "commits": []
+    }
+  ],
   "profile": "autonomous",
   "execution": "delegated",
-  "phase": "decompose",
-  "lastCompletedPhase": "plan"
+  "phase": "implement",
+  "lastCompletedPhase": "decompose"
 }
