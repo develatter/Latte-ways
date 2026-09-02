@@ -2,7 +2,7 @@
 
 ## Mission
 
-Take latte-ways from a functional MVP to a dogfood-ready harness. Preserve its minimal, agent-agnostic core: provider-specific launching belongs in optional adapters, not here.
+Take latte-ways from its current functional baseline to a dogfood-ready harness. Preserve its minimal, agent-agnostic core: provider-specific launching belongs in optional adapters, not here.
 
 ## Start here
 

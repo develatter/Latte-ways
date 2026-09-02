@@ -1,7 +1,8 @@
 # Repository map
 
 - Product overview and commands: `README.md`
-- Next-agent context: `docs/HANDOFF.md` when present
+- Planned milestones: `docs/ROADMAP.md`
+- Next-agent context and current caveats: `docs/HANDOFF.md` when present
 - Runtime implementation: `src/`
 - Bootstrap templates and schemas: `assets/`
 - Automated verification: `tests/`

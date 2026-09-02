@@ -1,4 +1,4 @@
-# MVP acceptance
+# Baseline acceptance
 
 1. No SDD phase advances without a filled artifact and certified prior phase.
 2. State survives interruption; Git divergence fails closed until explicit repair.

@@ -2,7 +2,7 @@
 
 A minimal, agent-agnostic development harness with Git-backed workflows, deterministic SDD gates, and living OKF v0.2 memory.
 
-> **Status:** MVP. The core workflow, mechanical enforcement, human approvals and digest-bound reviews are implemented and tested. See [`docs/HANDOFF.md`](docs/HANDOFF.md) for the next milestone.
+> The core workflow, mechanical enforcement, human approvals and digest-bound reviews are implemented and tested. See the [roadmap](docs/ROADMAP.md) for planned milestones and [`docs/HANDOFF.md`](docs/HANDOFF.md) for operational context.
 
 ## Why
 
