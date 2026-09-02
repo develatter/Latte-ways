@@ -4,9 +4,9 @@
   "mode": "sdd",
   "id": "claude-adapter",
   "status": "active",
-  "gateCommit": "a2140c0a58940c71b5de859a2d3da1d7a8653be0",
-  "updatedAt": "2026-09-02T09:28:16.938Z",
-  "phase": "validate",
+  "gateCommit": "950b5524b4c3f65b9bee0e9d9258248ed000bb81",
+  "updatedAt": "2026-09-02T09:28:29.885Z",
+  "phase": "reconcile-memory",
   "humanGate": false,
   "profile": "autonomous"
 }
