@@ -3,10 +3,11 @@ import { mkdtemp, readFile, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
-import { mergeClaudeSettings, renderClaude } from "../src/adapters/claude.js";
+import { hasGuard, mergeClaudeSettings, renderClaude, resolveNames } from "../src/adapters/claude.js";
 import { installAdapter, PROVIDERS } from "../src/adapters/install.js";
 import { loadAdapterSource, MAX_ROLE_LINES, nonEmptyLines } from "../src/adapters/source.js";
 import { bootstrap } from "../src/bootstrap/bootstrap.js";
+import { run } from "../src/cli.js";
 import { GitRepository } from "../src/git/git.js";
 import { checkIntegrity } from "../src/integrity/integrity.js";
 import { applyUpgrade, planUpgrade } from "../src/upgrade/upgrade.js";
@@ -61,11 +62,26 @@ describe("claude renderer", () => {
 
   it("merges settings without dropping user keys and stays idempotent", () => {
     const once = mergeClaudeSettings({ theme: "dark", hooks: { PreToolUse: [{ matcher: "Write", hooks: [{ type: "command", command: "mine.sh" }] }] } });
-    const twice = mergeClaudeSettings(once);
-    expect(twice).toEqual(once);
-    expect(once.theme).toBe("dark");
-    const groups = (once.hooks as { PreToolUse: Array<{ hooks: Array<{ command: string }> }> }).PreToolUse;
-    expect(groups.flatMap((group) => group.hooks.map((hook) => hook.command))).toEqual(["mine.sh", ".claude/ways-guard.sh"]);
+    const twice = mergeClaudeSettings(once.settings);
+    expect(twice.settings).toEqual(once.settings);
+    expect(once.settings.theme).toBe("dark");
+    expect(hasGuard(once.settings)).toBe(true);
+    const groups = (once.settings.hooks as { PreToolUse: Array<{ hooks: Array<{ command: string }> }> }).PreToolUse;
+    expect(groups.flatMap((group) => group.hooks.map((hook) => hook.command))).toEqual(["mine.sh", "\"$CLAUDE_PROJECT_DIR\"/.claude/ways-guard.sh"]);
+  });
+
+  it("keeps a user-defined statusline and reports it", () => {
+    const { settings, notes } = mergeClaudeSettings({ statusLine: { type: "command", command: "my-status.sh" } });
+    expect((settings.statusLine as { command: string }).command).toBe("my-status.sh");
+    expect(notes[0]).toMatch(/kept existing statusLine/);
+    expect(hasGuard(settings)).toBe(true);
+  });
+
+  it("resolves neutral placeholders and leaves no provider names in the source", async () => {
+    expect(resolveNames("use {{command:quick}} then {{role:reviewer}}")).toBe("use /ways-quick then ways-reviewer");
+    const source = await loadAdapterSource();
+    const texts = [...source.commands.map((c) => c.body), ...source.roles.map((r) => r.body), source.guard, source.statusline];
+    for (const text of texts) expect(text).not.toMatch(/ways-[a-z]/);
   });
 });
 
@@ -96,6 +112,23 @@ describe("adapter installation", () => {
     expect(await checkIntegrity(cwd)).toEqual([]);
   });
 
+  it("removes orphaned files and serves the CLI paths", async () => {
+    const { cwd, git } = await repository();
+    expect(await run(["bootstrap", `--test-command=${JSON.stringify([process.execPath, "-e", "process.exit(0)"])}`, "--no-adapters"], cwd)).toBe(0);
+    const manifestPath = join(cwd, ".ways/manifest.json");
+    expect(JSON.parse(await readFile(manifestPath, "utf8")).adapters).toBeUndefined();
+    expect(await run(["adapter", "list"], cwd)).toBe(0);
+    expect(await run(["adapter", "install", "claude"], cwd)).toBe(0);
+    const manifest = JSON.parse(await readFile(manifestPath, "utf8")) as { adapters: { claude: Record<string, string> } };
+    manifest.adapters.claude[".claude/agents/ways-legacy.md"] = "0".repeat(64);
+    await writeFile(manifestPath, `${JSON.stringify(manifest)}\n`);
+    await writeFile(join(cwd, ".claude/agents/ways-legacy.md"), "old\n");
+    await installAdapter(cwd, "claude");
+    await expect(readFile(join(cwd, ".claude/agents/ways-legacy.md"))).rejects.toThrow();
+    await expect(run(["adapter", "install", "nope"], cwd)).rejects.toThrow(/Unknown provider/);
+    void git;
+  });
+
   it("statusline and guard read the status artifact with plain shell", async () => {
     const { cwd } = await repository();
     await bootstrap({ cwd, testCommand: [process.execPath, "-e", "process.exit(0)"] });
@@ -109,7 +142,18 @@ describe("adapter installation", () => {
     };
     expect(run(".claude/ways-statusline.sh", { workspace: { project_dir: cwd } }).stdout).toBe("ways: idle");
     expect(run(".claude/ways-guard.sh", { tool_input: { command: "git add . && git commit -m x" }, cwd }).code).toBe(2);
+    expect(run(".claude/ways-guard.sh", { tool_input: { command: "git -C . commit" }, cwd }).code).toBe(2);
     expect(run(".claude/ways-guard.sh", { tool_input: { command: "git log" }, cwd }).code).toBe(0);
+    expect(run(".claude/ways-guard.sh", { tool_input: { command: "git status", description: "check before git commit" }, cwd }).code).toBe(0);
+    expect(run(".claude/ways-guard.sh", { tool_input: { command: "git log --grep commit" }, cwd }).code).toBe(0);
+    expect(run(".claude/ways-guard.sh", { tool_input: { command: "echo git commit" }, cwd }).code).toBe(0);
+    expect(run(".claude/ways-guard.sh", { tool_input: { command: "git commitment" }, cwd }).code).toBe(0);
+    expect(run(".claude/ways-guard.sh", { tool_input: { command: "npm test && git commit -am x" }, cwd }).code).toBe(2);
+    expect(run(".claude/ways-guard.sh", { tool_input: { command: "command git commit" }, cwd }).code).toBe(2);
+    expect(run(".claude/ways-guard.sh", { tool_input: { command: "/usr/bin/git commit -m x" }, cwd }).code).toBe(2);
+    expect(run(".claude/ways-guard.sh", { tool_input: { command: "echo `git commit -m x`" }, cwd }).code).toBe(2);
+    expect(run(".claude/ways-guard.sh", { tool_input: { command: "sh -c \"git commit -m x\"" }, cwd }).code).toBe(2);
+    expect(run(".claude/ways-guard.sh", { tool_input: { command: "x=$(git commit -m x)" }, cwd }).code).toBe(2);
     const git = new GitRepository(cwd);
     await git.run(["add", "."]);
     await git.run(["commit", "-q", "-m", "bootstrap"]);

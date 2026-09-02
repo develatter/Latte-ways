@@ -1,4 +1,4 @@
-import { chmod, lstat, readFile } from "node:fs/promises";
+import { chmod, lstat, readFile, rm } from "node:fs/promises";
 import { join } from "node:path";
 import { MANIFEST_PATH } from "../domain/constants.js";
 import type { ManagedManifest } from "../domain/types.js";
@@ -20,6 +20,7 @@ export interface InstallResult {
   provider: string;
   files: string[];
   merged: string[];
+  notes: string[];
 }
 
 async function exists(path: string): Promise<boolean> {
@@ -67,10 +68,14 @@ export async function installAdapter(cwd: string, providerId: string, force = fa
     }
   }
   const hashes = await writeRendered(cwd, files);
-  const merged = adapter.merge ? await adapter.merge(cwd) : [];
+  for (const orphan of owned) {
+    if (!(orphan in hashes)) await rm(join(cwd, orphan), { force: true });
+  }
+  const merged = adapter.merge ? await adapter.merge(cwd) : { files: [], notes: [] };
   manifest.adapters = { ...(manifest.adapters ?? {}), [adapter.id]: hashes };
+  manifest.generatedAt = new Date().toISOString();
   await writeAtomic(join(cwd, MANIFEST_PATH), stableJson(manifest));
-  return { provider: adapter.id, files: Object.keys(hashes), merged };
+  return { provider: adapter.id, files: Object.keys(hashes), merged: merged.files, notes: merged.notes };
 }
 
 export async function installAllAdapters(cwd: string, force = false): Promise<InstallResult[]> {

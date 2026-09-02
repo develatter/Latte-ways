@@ -1,15 +1,11 @@
 {
   "schemaVersion": 1,
   "harnessVersion": "0.1.0",
-  "generatedAt": "2026-09-01T23:11:47.355Z",
+  "generatedAt": "2026-09-02T09:26:01.314Z",
   "managedFiles": {
     "AGENTS.md": "7a1898834d16766d18cd9a12ab9553fa4eb0e30f060a7e693128050560837596",
     "MAP.md": "c31b9da576f1368018bd9226d37f6db3e7432fbeed616809f8dae543ffef3f20",
     "scripts/check.sh": "47e15a01b7eba13596e6eb0a07b67d38914b77e6757baecf4ce393b550587ffc",
-    ".ways/agents/explorer.md": "6cdc4529518b8b2a00b3d0bf90e925efc3626b35418bf4cc3c27dd73bc9158d3",
-    ".ways/agents/implementer.md": "ef5144b9ff151ad11779b9950405544444c2e71d832824b13d7a0f97a858953a",
-    ".ways/agents/reviewer.md": "36ec6f6f059bdda2e9a40131d21c19014d3ad7a279dbb6e5dc2de4125dbfa9e9",
-    ".ways/agents/orchestrator.md": "898cb25c9b162406e3b251b05fb063d2038b69352262eca2fc5b1e172e5bccf2",
     ".ways/.gitignore": "bf8cd769ff4e47c7f82e7c84ba7b2c6c2f56a24fb27bb77dbfa815870d396c8f",
     ".ways/hooks/commit-msg": "1a654a3a0869431afa04fd3d30924ef3daabacf56c6ceedec824cab24ffc101e"
   },
@@ -31,7 +27,7 @@
       ".claude/agents/ways-reviewer.md": "7c98e46e6f6a2cee083282a026f072c09637e681c02f4f26b93c68aa0ea5b0bc",
       ".claude/agents/ways-sweeper.md": "28ffd32f1adf4797e680cb4dc1b6612fa55963bc6faead686ef5a2e2f8fe25a5",
       ".claude/ways-statusline.sh": "70e007bc75d2283ac00e4075a046f927fa6e3bd6c3bf1f36a82d3b87847e9874",
-      ".claude/ways-guard.sh": "005e64abe5a368516ffce1a6d3b5afaa89bb9be73fd43d427193cb3653888758"
+      ".claude/ways-guard.sh": "b190f67089f214d0239ae7f16f629cf586992837101f4022cb2c4964ee34f4c9"
     }
   }
 }

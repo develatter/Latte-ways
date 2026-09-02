@@ -30,8 +30,21 @@ export interface RenderedFile {
  * `render` returns files that the harness owns entirely and hashes.
  * `merge` may adjust files shared with the user (settings) and must be idempotent.
  */
+export interface MergeResult {
+  files: string[];
+  notes: string[];
+}
+
+export interface AdapterIssue {
+  code: string;
+  path: string;
+  message: string;
+}
+
 export interface ProviderAdapter {
   id: string;
   render(source: AdapterSource): RenderedFile[];
-  merge?(cwd: string): Promise<string[]>;
+  merge?(cwd: string): Promise<MergeResult>;
+  /** Structural checks on shared files the adapter cannot hash (settings). */
+  verify?(cwd: string): Promise<AdapterIssue[]>;
 }

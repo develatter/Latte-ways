@@ -148,6 +148,7 @@ export async function run(argv: readonly string[], cwd = process.cwd()): Promise
     if (action === "install" && provider) {
       const result = await installAdapter(cwd, provider, args.includes("--force"));
       console.log(`Adapter ${result.provider} installed: ${result.files.length} files${result.merged.length ? `, merged ${result.merged.join(", ")}` : ""}.`);
+      for (const note of result.notes) console.log(`- ${note}`);
       return 0;
     }
     throw new Error("Usage: ways adapter list | install <provider> [--force]");

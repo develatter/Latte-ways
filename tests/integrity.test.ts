@@ -30,9 +30,9 @@ describe("integrity", () => {
     expect((await checkIntegrity(cwd)).map((issue) => issue.code)).toContain("managed-file-modified");
   });
 
-  it("enforces compact agent prompts", async () => {
+  it("verifies adapter settings structurally", async () => {
     const cwd = await installed();
-    await writeFile(join(cwd, ".ways/agents/reviewer.md"), "1\n2\n3\n4\n5\n6\n7\n");
-    expect((await checkIntegrity(cwd)).map((issue) => issue.code)).toContain("prompt-too-long");
+    await writeFile(join(cwd, ".claude/settings.json"), "{}\n");
+    expect((await checkIntegrity(cwd)).map((issue) => issue.code)).toContain("adapter-guard-missing");
   });
 });

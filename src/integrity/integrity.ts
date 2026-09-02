@@ -7,6 +7,7 @@ import { sha256 } from "../fs/files.js";
 import { indexesMatch } from "../knowledge/indexes.js";
 import { inspectOkf } from "../knowledge/okf.js";
 import { GitRepository } from "../git/git.js";
+import { providerById } from "../adapters/install.js";
 import { readStatus, statusMatches } from "../state/status.js";
 import { commitsAfter } from "./history.js";
 
@@ -125,13 +126,12 @@ export async function checkIntegrity(cwd: string): Promise<IntegrityIssue[]> {
     issues.push({ code: "stale-index", path: INDEX_DIR, message: "Knowledge indexes do not match the OKF bundle" });
   }
 
-  for (const role of ["explorer", "implementer", "reviewer", "orchestrator"]) {
-    const relative = `.ways/agents/${role}.md`;
+  for (const provider of Object.keys(manifest?.adapters ?? {})) {
     try {
-      const lines = (await readFile(join(cwd, relative), "utf8")).split("\n").filter((line) => line.trim().length > 0);
-      if (lines.length > 6) issues.push({ code: "prompt-too-long", path: relative, message: "Agent prompt exceeds six non-empty lines" });
-    } catch {
-      // Managed-file checks report the missing file.
+      const adapter = providerById(provider);
+      if (adapter.verify) issues.push(...await adapter.verify(cwd));
+    } catch (error) {
+      issues.push({ code: "adapter-unknown", path: MANIFEST_PATH, message: error instanceof Error ? error.message : String(error) });
     }
   }
 

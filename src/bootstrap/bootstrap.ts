@@ -21,10 +21,6 @@ export const MANAGED_ASSETS: Array<[string, string, number?]> = [
   ["MAP.md", "MAP.md"],
   ["scripts/check.sh", "check.sh", 0o755],
   [`${HOOKS_DIR}/commit-msg`, "commit-msg", 0o755],
-  [".ways/agents/explorer.md", "agents/explorer.md"],
-  [".ways/agents/implementer.md", "agents/implementer.md"],
-  [".ways/agents/reviewer.md", "agents/reviewer.md"],
-  [".ways/agents/orchestrator.md", "agents/orchestrator.md"],
   [".ways/.gitignore", "ways.gitignore"],
 ];
 const KNOWLEDGE_TYPES = ["system", "components", "conventions", "decisions", "faq"];

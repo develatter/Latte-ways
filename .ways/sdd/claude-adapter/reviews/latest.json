@@ -1,0 +1,74 @@
+{
+  "schemaVersion": 1,
+  "workId": "claude-adapter",
+  "reviewer": "independent-reviewer-subagent",
+  "verdict": "pass",
+  "findings": [
+    {
+      "id": "R1",
+      "severity": "medium",
+      "summary": "guard matched whole JSON; now parses tool_input.command with node and matches git [options] commit as subcommand",
+      "disposition": "fixed"
+    },
+    {
+      "id": "R2",
+      "severity": "medium",
+      "summary": "settings.json unverified; ProviderAdapter.verify checks guard hook and statusLine in integrity",
+      "disposition": "fixed"
+    },
+    {
+      "id": "R3",
+      "severity": "medium",
+      "summary": "role prompts duplicated; assets/bootstrap/agents and .ways/agents removed, assets/adapters/roles is the only source",
+      "disposition": "fixed"
+    },
+    {
+      "id": "R4",
+      "severity": "low",
+      "summary": "foreign statusLine now preserved and reported",
+      "disposition": "fixed"
+    },
+    {
+      "id": "R5",
+      "severity": "low",
+      "summary": "provider names in neutral source replaced by {{command:x}}/{{role:x}} placeholders",
+      "disposition": "fixed"
+    },
+    {
+      "id": "R6",
+      "severity": "low",
+      "summary": "orphaned adapter files removed on reinstall; generatedAt refreshed",
+      "disposition": "fixed"
+    },
+    {
+      "id": "R7",
+      "severity": "low",
+      "summary": "guard does not intercept cherry-pick/merge/rebase/gh pr merge; documented, commit-msg hook and history check are the backstop",
+      "disposition": "accepted"
+    },
+    {
+      "id": "R8",
+      "severity": "low",
+      "summary": "tests added for CLI paths, --no-adapters, unknown provider, orphans, foreign statusline, placeholders, guard cases",
+      "disposition": "fixed"
+    },
+    {
+      "id": "R9",
+      "severity": "low",
+      "summary": "hook command uses $CLAUDE_PROJECT_DIR",
+      "disposition": "fixed"
+    },
+    {
+      "id": "R10",
+      "severity": "low",
+      "summary": "guard accepts command/exec/builtin prefixes, paths, backticks, $( and quoted sh -c strings",
+      "disposition": "fixed"
+    },
+    {
+      "id": "R11",
+      "severity": "low",
+      "summary": "guard fails closed when node is missing, only for commit-like commands",
+      "disposition": "fixed"
+    }
+  ]
+}
