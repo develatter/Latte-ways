@@ -1,5 +1,9 @@
 {
   "schemaVersion": 1,
-  "active": false,
-  "updatedAt": "2026-09-02T09:03:20.521Z"
+  "active": true,
+  "mode": "plan",
+  "id": "claude-adapter",
+  "status": "active",
+  "gateCommit": "e47edfa7b4bf644e8d854029eec04ffffa79a6b6",
+  "updatedAt": "2026-09-02T09:06:45.920Z"
 }
