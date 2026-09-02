@@ -6,7 +6,7 @@ import { bootstrap } from "../src/bootstrap/bootstrap.js";
 import { GitRepository } from "../src/git/git.js";
 import { loadState } from "../src/state/store.js";
 import { advanceSdd, startSdd } from "../src/work/sdd.js";
-import { submitReview } from "../src/work/review.js";
+import { reviewDigest, submitReview } from "../src/work/review.js";
 
 async function setup(): Promise<{ cwd: string; git: GitRepository }> {
   const cwd = await mkdtemp(join(tmpdir(), "ways-flow-"));
@@ -41,7 +41,7 @@ it("runs every SDD phase without allowing a skipped gate", async () => {
   await fill(cwd, work, "review");
   const reviewPath = join(cwd, ".ways/runtime/review.json");
   await mkdir(join(cwd, ".ways/runtime"), { recursive: true });
-  await writeFile(reviewPath, JSON.stringify({ schemaVersion: 1, workId: work, reviewer: "independent/reviewer", verdict: "pass", findings: [] }));
+  await writeFile(reviewPath, JSON.stringify({ schemaVersion: 1, workId: work, reviewer: "independent/reviewer", digest: await reviewDigest(cwd), verdict: "pass", findings: [] }));
   await submitReview(cwd, reviewPath);
   await advanceSdd(cwd);
   for (const phase of ["validate", "reconcile-memory", "close"]) {

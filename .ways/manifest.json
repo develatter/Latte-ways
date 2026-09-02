@@ -1,7 +1,7 @@
 {
   "schemaVersion": 1,
   "harnessVersion": "0.1.0",
-  "generatedAt": "2026-09-02T11:00:54.380Z",
+  "generatedAt": "2026-09-02T11:16:08.506Z",
   "managedFiles": {
     "AGENTS.md": "11c77d328aefb52c308c28d1acccef1527a70557be147385d2ed71bf4b0ad21d",
     "MAP.md": "c31b9da576f1368018bd9226d37f6db3e7432fbeed616809f8dae543ffef3f20",
@@ -14,15 +14,15 @@
       ".claude/commands/ways-plan.md": "31dc099ef01a378ad7c6ce03650cf9c14640d106509bc2d907166d4a45f49015",
       ".claude/commands/ways-query.md": "a5d072d3ba94e89da069efc706f25ff84cf34e96151979ef47fde2b1dbe11ac0",
       ".claude/commands/ways-quick.md": "21ea632eb80a4b575a3a8cdcf00b5dc386fb24e3abbaf99dd6d78276f71d4839",
-      ".claude/commands/ways-sdd.md": "f2b39329e097a500d6ddf40f519a3f63a25c96ef13eff07b6f6b1bb3de487a2f",
+      ".claude/commands/ways-sdd.md": "22a468563f0f85e539ba2d8be989eeb4550fee8b1f396e0f7a3c72c742598f27",
       ".claude/commands/ways-status.md": "377b5c5b4f8f96a67f7c0f62e613af1f1c502514579f97491f46def52400b11a",
       ".claude/agents/ways-explorer.md": "20d8ee447c3b175585fbffc48049ab0f9c297861b39277ad063c5404af50a7c1",
       ".claude/agents/ways-implementer.md": "9849b88ef4679c738d6ddf94dba461b2d654ec1a26033e7a5d74bf8c78d38237",
       ".claude/agents/ways-qa.md": "dfd52b05417a68ebbb5352afd9ac36eb0acb04ca8ee03823e96ec1336f87156e",
-      ".claude/agents/ways-reviewer.md": "9d0c77fe48fa03586e748e2051ee57bf3e1afde84ddb2a22699ab8854139bf22",
+      ".claude/agents/ways-reviewer.md": "90e07a8e9efcf0a67d09e325ac2e9615b04786225d34160d30485686639d20db",
       ".claude/agents/ways-sweeper.md": "28ffd32f1adf4797e680cb4dc1b6612fa55963bc6faead686ef5a2e2f8fe25a5",
       ".claude/ways-statusline.sh": "c0e5a41da2a9e1577ad486c50b3dd63fd9bc1aaa530a4c78381dc42917ab1861",
-      ".claude/ways-guard.sh": "0d55d1c050e73bc2e672ee58cf53fccff0b2e6ac4f31a85790d88e9b7a17e513"
+      ".claude/ways-guard.sh": "004e3f8fe4764c516a4b5290565e3d81247e0ce3c7f25ac102965640fc5330c1"
     }
   }
 }

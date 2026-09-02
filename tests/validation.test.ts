@@ -36,6 +36,7 @@ describe("contracts", () => {
       schemaVersion: 1,
       workId: "auth-refresh",
       reviewer: "agent:reviewer",
+      digest: "0000000000000000000000000000000000000000000000000000000000000000",
       verdict: "pass",
       findings: [],
     })).toBe(true);

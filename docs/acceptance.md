@@ -15,3 +15,5 @@
 13. Bootstrap renders every registered provider adapter from `assets/adapters/`; tampering with a rendered file fails integrity.
 14. No role prompt exceeds six non-empty lines; loading the canonical source enforces it.
 15. In delegated SDD, the implement gate refuses commits that were not integrated from a task; the orchestrator cannot implement.
+16. A supervised human gate only advances with an approval written by `ways approve` in a TTY and bound to work, phase, gate commit and content digest; any later edit invalidates it.
+17. A review is accepted only with the current diff digest and blocks the gate if the content changes afterwards.

@@ -1,8 +1,9 @@
 #!/usr/bin/env sh
 # Managed by latte-ways. Blocks agent-issued git commits when no harness work is active,
-# and blocks file edits in the main worktree while a delegated SDD implement phase is running.
+# blocks file edits in the main worktree while a delegated SDD implement phase is running,
+# and blocks any tool write to human approvals or review verdicts.
 input="$(cat)"
-case "$input" in *commit*|*Edit*|*Write*) ;; *) exit 0 ;; esac
+case "$input" in *commit*|*Edit*|*Write*|*approvals*|*reviews*) ;; *) exit 0 ;; esac
 command -v node >/dev/null 2>&1 || { echo "ways: node not found; refusing to run git commit without the guard" >&2; exit 2; }
 printf '%s' "$input" | exec node -e '
 let data = "";
@@ -15,11 +16,16 @@ process.stdin.on("data", (chunk) => { data += chunk; }).on("end", () => {
   const option = "(?:-[^\\s]+\\s+(?:[^-\\s][^\\s]*\\s+)?)*";
   const prefix = "(?:(?:command|exec|builtin)\\s+|[^\\s;&|(`]*/)?";
   const commits = new RegExp("(?:^|[;&|(`\\x22\\x27]\\s*|\\$\\(\\s*)" + prefix + "git\\s+" + option + "commit(?:\\s|$)", "m");
+  const evidence = /\.ways\/sdd\/[^\/\s]+\/(approvals|reviews)(\/|$)/;
+  const edited = event.tool_input?.file_path ?? event.tool_input?.notebook_path;
+  if ((edits && typeof edited === "string" && evidence.test(edited)) || (!edits && evidence.test(command))) {
+    process.stderr.write("ways: approvals and review verdicts are written only by `ways approve` and `ways review submit`\n");
+    process.exit(2);
+  }
   if (!edits && !commits.test(command)) process.exit(0);
   const { execFileSync } = require("node:child_process");
   const { existsSync, readFileSync } = require("node:fs");
   const { dirname, resolve } = require("node:path");
-  const edited = event.tool_input?.file_path ?? event.tool_input?.notebook_path;
   let target = edits && typeof edited === "string" ? dirname(resolve(String(event.cwd ?? process.cwd()), edited)) : String(event.cwd ?? process.cwd());
   while (!existsSync(target) && dirname(target) !== target) target = dirname(target);
   let root;

@@ -2,7 +2,7 @@
 
 A minimal, agent-agnostic development harness with Git-backed workflows, deterministic SDD gates, and living OKF v0.2 memory.
 
-> **Status:** MVP. The core workflow is implemented and tested, but human approvals and reviewer independence are not yet strongly authenticated. See [`docs/HANDOFF.md`](docs/HANDOFF.md) for the next milestone.
+> **Status:** MVP. The core workflow, mechanical enforcement, human approvals and digest-bound reviews are implemented and tested. See [`docs/HANDOFF.md`](docs/HANDOFF.md) for the next milestone.
 
 ## Why
 
@@ -58,7 +58,9 @@ Each transition validates the previous certification in Git, updates JSON state,
 
 SDD runs `inline` (the agent may implement itself) or `--delegated` (the session is the orchestrator and never edits code: implementation always arrives through subagent task worktrees, integrated in dependency order, in parallel when independent). The implement gate in delegated mode rejects any commit that was not integrated from a task, and the Claude guard blocks `Edit`/`Write` in the main worktree during that phase.
 
-Parallel tasks run in isolated worktrees. The core creates task packets and integrates traced commits, but deliberately does not launch agents. Review is delegated, read-only, severity-gated, and required even when implementation is inline.
+Parallel tasks run in isolated worktrees. The core creates task packets and integrates traced commits, but deliberately does not launch agents. Review is delegated, read-only, severity-gated, and required even when implementation is inline. The review JSON carries the digest printed by `ways review digest`; submit and the gate recompute it, so a review dies with any later edit.
+
+Supervised profile (`--supervised`) adds human gates at intake, plan and close. The only way through is `ways approve`, run by the human in a real terminal: it refuses without a TTY, shows the gate and digest, asks for the phase name to be typed, and writes `.ways/sdd/<id>/approvals/<phase>.json` bound to work, phase, gate commit and content digest. The gate, the commit-msg hook and the provider guard all verify that binding; there is no flag an agent can pass.
 
 ## Knowledge
 
@@ -89,6 +91,7 @@ Compliance does not depend on the agent obeying its prompt:
 - Bootstrap installs a managed `commit-msg` hook under `.ways/hooks/` and sets `core.hooksPath`. Any commit not traced to the active work with a matching `Harness-Work` trailer is rejected. Small edits open `ways quick start <id>` first.
 - `ways check --history [--since=<ref>]` audits every first-parent commit after the anchor (`--since`, `historySince` in config, or the commit that introduced `.ways/manifest.json`) for trailers and unbroken SDD certification chains. `scripts/check.sh` runs it, so a `--no-verify` bypass still fails in CI.
 - With an active work, integrity also fails on any commit after its base that lacks the work trailer.
+- Certifying a supervised human gate requires a bound approval artifact in the same commit; the closing commit must delete the one committed for `close`. Tool writes under `approvals/` and `reviews/` are blocked by the guard.
 
 ## Provider adapters
 

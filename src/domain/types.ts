@@ -78,7 +78,18 @@ export interface ReviewResult {
   schemaVersion: 1;
   workId: string;
   reviewer: string;
+  digest: string;
   verdict: "pass" | "fail";
   findings: ReviewFinding[];
   taskId?: string;
+}
+
+export interface ApprovalRecord {
+  schemaVersion: 1;
+  workId: string;
+  phase: SddPhase;
+  gateCommit: string;
+  digest: string;
+  approvedBy: string;
+  approvedAt: string;
 }

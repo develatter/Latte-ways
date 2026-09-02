@@ -7,6 +7,7 @@ describe("review gate", () => {
       schemaVersion: 1,
       workId: "x",
       reviewer: "independent-agent",
+      digest: "0000000000000000000000000000000000000000000000000000000000000000",
       verdict: "pass",
       findings: [{ id: "F1", severity: "high", summary: "Broken", disposition: "accepted" }],
     })).toContain("F1");
@@ -17,6 +18,7 @@ describe("review gate", () => {
       schemaVersion: 1,
       workId: "x",
       reviewer: "independent-agent",
+      digest: "0000000000000000000000000000000000000000000000000000000000000000",
       verdict: "pass",
       findings: [{ id: "F2", severity: "low", summary: "Naming", disposition: "deferred" }],
     })).toEqual([]);

@@ -3,12 +3,13 @@
   "$id": "https://latte-ways.dev/schemas/review-v1.json",
   "type": "object",
   "additionalProperties": false,
-  "required": ["schemaVersion", "workId", "reviewer", "verdict", "findings"],
+  "required": ["schemaVersion", "workId", "reviewer", "digest", "verdict", "findings"],
   "properties": {
     "schemaVersion": { "const": 1 },
     "workId": { "type": "string", "minLength": 1 },
     "taskId": { "type": "string", "minLength": 1 },
     "reviewer": { "type": "string", "minLength": 1 },
+    "digest": { "type": "string", "pattern": "^[0-9a-f]{64}$" },
     "verdict": { "enum": ["pass", "fail"] },
     "findings": {
       "type": "array",

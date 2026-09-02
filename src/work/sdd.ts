@@ -7,8 +7,8 @@ import { SDD_PHASES, type ApprovalProfile, type ExecutionMode, type SddPhase, ty
 import { writeAtomic } from "../fs/files.js";
 import { GitRepository } from "../git/git.js";
 import { commitsAfter } from "../integrity/history.js";
-import { HUMAN_GATES } from "../state/status.js";
 import { loadState, removeState, saveState } from "../state/store.js";
+import { assertApproved, requiresApproval } from "./approve.js";
 import { assertReviewPassed } from "./review.js";
 
 function phasePath(state: WorkState, phase: SddPhase): string {
@@ -88,19 +88,17 @@ export async function startSdd(cwd: string, id: string, profile: ApprovalProfile
   return state;
 }
 
-export async function advanceSdd(cwd: string, approved = false): Promise<string> {
+export async function advanceSdd(cwd: string): Promise<string> {
   const state = await loadState(cwd);
   if (!state || state.mode !== "sdd" || !state.phase) throw new Error("No active SDD work");
   await assertSddConsistency(cwd, state);
-  if (state.profile === "supervised" && HUMAN_GATES.has(state.phase) && !approved) {
-    throw new Error(`Phase ${state.phase} requires explicit human approval`);
-  }
   await assertPhaseFilled(cwd, state);
+  if (requiresApproval(state)) await assertApproved(cwd, state);
   if (state.phase === "implement" && state.tasks.some((task) => task.status !== "completed")) {
     throw new Error("Every declared task must be integrated before implementation can complete");
   }
   if (state.phase === "implement" && state.execution === "delegated") await assertDelegatedImplementation(cwd, state);
-  if (state.phase === "review") await assertReviewPassed(cwd, state.id);
+  if (state.phase === "review") await assertReviewPassed(cwd, state);
   if (state.phase === "validate" || state.phase === "close") {
     const checks = await runChecks(cwd);
     if (checks.issues.length > 0 || checks.testExitCode !== 0) throw new Error(`Checks failed during ${state.phase}`);

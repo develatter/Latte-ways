@@ -2,9 +2,9 @@ import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import type { AnySchema, ErrorObject, ValidateFunction } from "ajv";
 import { Ajv2020 } from "ajv/dist/2020.js";
-import type { HarnessConfig, ManagedManifest, ReviewResult, WorkState } from "./types.js";
+import type { ApprovalRecord, HarnessConfig, ManagedManifest, ReviewResult, WorkState } from "./types.js";
 
-type SchemaName = "config" | "manifest" | "state" | "task" | "review";
+type SchemaName = "config" | "manifest" | "state" | "task" | "review" | "approval";
 
 export interface ValidationResult {
   valid: boolean;
@@ -25,6 +25,7 @@ const validators: Record<Exclude<SchemaName, "task">, ValidateFunction> = {
   manifest: ajv.compile(loadSchema("manifest")),
   state: ajv.compile(loadSchema("state")),
   review: ajv.compile(loadSchema("review")),
+  approval: ajv.compile(loadSchema("approval")),
 };
 
 function formatErrors(errors: ErrorObject[] | null | undefined): string[] {
@@ -51,6 +52,10 @@ export function validateState(value: unknown): value is WorkState {
 
 export function validateReview(value: unknown): value is ReviewResult {
   return validate("review", value).valid;
+}
+
+export function validateApproval(value: unknown): value is ApprovalRecord {
+  return validate("approval", value).valid;
 }
 
 export function validationDetails(name: keyof typeof validators, value: unknown): ValidationResult {

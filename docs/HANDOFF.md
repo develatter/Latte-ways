@@ -35,12 +35,12 @@ Take latte-ways from a functional MVP to a dogfood-ready harness. Preserve its m
 - Keep adapters as pure renderers plus an idempotent `merge` for shared settings files.
 - Keep every role prompt at six non-empty lines or fewer; the loader rejects longer prompts.
 
-## Priority 3: authentic approvals
+## Priority 3: authentic approvals (done)
 
-- Replace the forgeable `--approved` flag with a portable human-approval artifact or TTY confirmation.
-- Bind approval to work id, phase, artifact digest, and Git revision.
-- Bind review verdicts to the digest of the reviewed commit range; the reviewer is a subagent, and independence is proven by evidence, not identity.
-- Keep authentication optional at the adapter boundary only if the core can still verify evidence.
+- `ways approve` is the only writer of `.ways/sdd/<id>/approvals/<phase>.json`; it needs a TTY on stdin and stdout and a typed confirmation, and binds the artifact to work, phase, gate commit and the digest of the working diff (`src/work/approve.ts`, `src/work/digest.ts`).
+- Reviews carry the digest from `ways review digest`; submit and the review gate both recompute it.
+- The commit-msg hook refuses certifications of supervised human gates without a bound approval; the Claude guard blocks tool writes under `approvals/` and `reviews/`.
+- Remaining: a remote or signed approval channel for humans without a local terminal.
 
 ## Priority 4: trustworthy memory
 
@@ -59,12 +59,12 @@ Take latte-ways from a functional MVP to a dogfood-ready harness. Preserve its m
 
 ## Known limitations
 
-- Human approval is currently a CLI boolean and can be forged by an agent.
+- Approvals and review verdicts are plain files: the TTY barrier, the digest binding, the hook and the guard stop an agent from approving through its tools, but a Bash heredoc can still write the artifact. Only the digest and gate binding are verified afterwards, not who wrote the file.
 - Hooks can be bypassed with `--no-verify` or a relocated `WAYS_CLI`; `ways check --history` in CI is the backstop.
 - In delegated SDD the Claude guard blocks the four edit tools in the main worktree; Bash-driven writes are not intercepted and a hand-made `.ways/runtime/task.json` silences it. The implement gate, which only accepts commit hashes recorded by `task integrate`, is the mechanical backstop.
 - The Claude PreToolUse guard only recognises `git commit` invocations (including `command`/`exec` prefixes, absolute paths, subshells and `sh -c` strings); cherry-pick, merge, rebase or `gh pr merge` are not intercepted. It fails closed when `node` is missing from the hook PATH. The managed `commit-msg` hook and `check --history` remain the mechanical backstop.
 - The hook resolves the CLI from the main worktree: `WAYS_CLI`, then `node_modules/latte-ways`, then this package's own `dist/`, then `npx --no-install`. The CLI entry guard resolves symlinks, so linked installs are not silent no-ops.
-- Reviewer identity is declarative; read-only behavior is a protocol rather than a sandbox.
+- Reviewer identity is declarative; independence is proven by the digest binding, and read-only behavior is a protocol rather than a sandbox.
 - Git/state operations have recovery commands but are not yet transaction-journaled.
 - Worktree integration has happy-path coverage; conflict recovery needs dedicated states.
 - Memory validation checks structure, trust, freshness, and links but not semantic truth.
@@ -74,8 +74,8 @@ Take latte-ways from a functional MVP to a dogfood-ready harness. Preserve its m
 ## Definition of dogfood-ready
 
 - Every mutation boundary has tested crash recovery.
-- A supervised gate cannot be approved by the acting implementation agent.
-- Reviewer evidence is bound to the exact diff and cannot modify it unnoticed.
+- A supervised gate cannot be approved by the acting implementation agent (done: TTY barrier and bound artifact).
+- Reviewer evidence is bound to the exact diff and cannot modify it unnoticed (done: review digest).
 - Failed integration produces a recoverable state with no mixed commit.
 - Bootstrap and upgrade are tested from a packed npm consumer project.
 - Memory promotion and stale/contradictory knowledge have explicit workflows.

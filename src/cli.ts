@@ -16,7 +16,8 @@ import { projectStatus, readStatus, statusMatches } from "./state/status.js";
 import { loadState } from "./state/store.js";
 import { abandonPlan, finishPlan, promotePlan, proposePlan, startPlan } from "./work/plan.js";
 import { cancelQuick, finishQuick, startQuick } from "./work/quick.js";
-import { submitReview } from "./work/review.js";
+import { approveInteractively } from "./work/approve.js";
+import { reviewDigest, submitReview } from "./work/review.js";
 import { advanceSdd, downgradeSdd, startSdd } from "./work/sdd.js";
 import { addTask, integrateTask, prepareTask } from "./work/tasks.js";
 import { applyUpgrade, planUpgrade } from "./upgrade/upgrade.js";
@@ -97,7 +98,17 @@ export async function run(argv: readonly string[], cwd = process.cwd()): Promise
       console.log(`Review recorded: ${result.verdict}`);
       return 0;
     }
-    throw new Error("Usage: ways review submit <review.json>");
+    if (action === "digest") {
+      console.log(await reviewDigest(cwd));
+      return 0;
+    }
+    throw new Error("Usage: ways review submit <review.json> | digest");
+  }
+
+  if (command === "approve") {
+    const record = await approveInteractively(cwd);
+    console.log(`Approved ${record.phase} of ${record.workId} as ${record.approvedBy}.`);
+    return 0;
   }
 
   if (command === "task") {
@@ -130,14 +141,14 @@ export async function run(argv: readonly string[], cwd = process.cwd()): Promise
       return 0;
     }
     if (action === "advance") {
-      console.log(`SDD gate committed: ${await advanceSdd(cwd, args.includes("--approved"))}`);
+      console.log(`SDD gate committed: ${await advanceSdd(cwd)}`);
       return 0;
     }
     if (action === "downgrade" && (id === "quick" || id === "plan")) {
       console.log(`SDD downgraded: ${await downgradeSdd(cwd, id)}`);
       return 0;
     }
-    throw new Error("Usage: ways sdd start <id> [--supervised] [--delegated] | advance [--approved] | downgrade <quick|plan>");
+    throw new Error("Usage: ways sdd start <id> [--supervised] [--delegated] | advance | downgrade <quick|plan>");
   }
 
   if (command === "adapter") {

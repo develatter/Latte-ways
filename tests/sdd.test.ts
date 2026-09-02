@@ -5,6 +5,7 @@ import { describe, expect, it } from "vitest";
 import { bootstrap } from "../src/bootstrap/bootstrap.js";
 import { GitRepository } from "../src/git/git.js";
 import { loadState } from "../src/state/store.js";
+import { recordApproval } from "../src/work/approve.js";
 import { advanceSdd, startSdd } from "../src/work/sdd.js";
 
 async function repository(): Promise<{ cwd: string; git: GitRepository }> {
@@ -46,6 +47,7 @@ describe("SDD machine", () => {
     await startSdd(cwd, "safe-change", "supervised");
     await fill(cwd, "safe-change", "intake");
     await expect(advanceSdd(cwd)).rejects.toThrow("human approval");
-    await expect(advanceSdd(cwd, true)).resolves.toBeTruthy();
+    await recordApproval(cwd, "human");
+    await expect(advanceSdd(cwd)).resolves.toBeTruthy();
   });
 });
