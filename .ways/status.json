@@ -4,9 +4,9 @@
   "mode": "sdd",
   "id": "human-approvals",
   "status": "active",
-  "gateCommit": "21b54889e0bb11f7b619507c4286cffc5e4c184b",
-  "updatedAt": "2026-09-02T11:33:51.801Z",
-  "phase": "validate",
+  "gateCommit": "d940e1350335ad9c4b0842519dd016378dd50654",
+  "updatedAt": "2026-09-02T11:34:11.173Z",
+  "phase": "reconcile-memory",
   "humanGate": false,
   "profile": "autonomous"
 }
