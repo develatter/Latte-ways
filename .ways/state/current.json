@@ -5,66 +5,91 @@
   "mode": "sdd",
   "status": "active",
   "baseCommit": "712b0292422b54446a99c557d4567c52f43e6464",
-  "gateCommit": "06c653835bd099cd535c67ad47fe6f7252d41add",
+  "gateCommit": "8e400929de8621e147d507ea226a24919840b021",
   "createdAt": "2026-09-02T22:41:05.498Z",
-  "updatedAt": "2026-09-02T22:47:38.836Z",
+  "updatedAt": "2026-09-03T05:22:04.636Z",
   "tasks": [
     {
       "id": "memory-core",
       "title": "Define memory model, source coverage validation, config, canonical code-tree digest, and Git primitives",
-      "status": "ready",
+      "status": "completed",
       "dependsOn": [],
-      "commits": []
+      "commits": [
+        "3931413e84a439bff1f01a5ac43bc30e3b764465"
+      ],
+      "branch": "ways/living-memory/memory-core",
+      "worktree": "/home/latte/projects/latte-ways/.ways/worktrees/living-memory/memory-core"
     },
     {
       "id": "index-cache",
       "title": "Make indexes untracked lazy deterministic caches and query consume them",
-      "status": "ready",
+      "status": "completed",
       "dependsOn": [],
-      "commits": []
+      "commits": [
+        "929acad1d3ef02444ca0a2b8563bf9f48ea7a948"
+      ],
+      "branch": "ways/living-memory/index-cache",
+      "worktree": "/home/latte/projects/latte-ways/.ways/worktrees/living-memory/index-cache"
     },
     {
       "id": "incremental-memory",
       "title": "Implement mandatory bootstrap discovery and separate incremental memory commit/review workflow",
-      "status": "pending",
+      "status": "completed",
       "dependsOn": [
         "memory-core",
         "index-cache"
       ],
-      "commits": []
+      "commits": [
+        "6ca629e9c18e34190a6faeaea0f1719ff93f683b"
+      ],
+      "branch": "ways/living-memory/incremental-memory",
+      "worktree": "/home/latte/projects/latte-ways/.ways/worktrees/living-memory/incremental-memory"
     },
     {
       "id": "release-reconcile",
       "title": "Implement release reconciliation generations, evidence, candidate validation, and merge topology",
-      "status": "pending",
+      "status": "completed",
       "dependsOn": [
         "memory-core"
       ],
-      "commits": []
+      "commits": [
+        "f83c5d4bcac006f59d631160ed45395fdaf3598b"
+      ],
+      "branch": "ways/living-memory/release-reconcile",
+      "worktree": "/home/latte/projects/latte-ways/.ways/worktrees/living-memory/release-reconcile"
     },
     {
       "id": "adapters-migration",
       "title": "Integrate CLI, migration, bootstrap templates, and generated provider adapters",
-      "status": "pending",
+      "status": "completed",
       "dependsOn": [
         "index-cache",
         "incremental-memory",
         "release-reconcile"
       ],
-      "commits": []
+      "commits": [
+        "4723b5d6143f4da2fa4e84a144af5ef148953975"
+      ],
+      "branch": "ways/living-memory/adapters-migration",
+      "worktree": "/home/latte/projects/latte-ways/.ways/worktrees/living-memory/adapters-migration"
     },
     {
       "id": "baseline-e2e",
       "title": "Create repository baseline and complete CI, packed-consumer, sync, and adversarial end-to-end coverage",
-      "status": "pending",
+      "status": "completed",
       "dependsOn": [
         "adapters-migration"
       ],
-      "commits": []
+      "commits": [
+        "c29937c58290e7f675c32e79099b115b85d45957",
+        "8e400929de8621e147d507ea226a24919840b021"
+      ],
+      "branch": "ways/living-memory/baseline-e2e",
+      "worktree": "/home/latte/projects/latte-ways/.ways/worktrees/living-memory/baseline-e2e"
     }
   ],
   "profile": "autonomous",
   "execution": "delegated",
-  "phase": "implement",
-  "lastCompletedPhase": "decompose"
+  "phase": "review",
+  "lastCompletedPhase": "implement"
 }
