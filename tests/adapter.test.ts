@@ -12,7 +12,7 @@ import { run } from "../src/cli.js";
 import { GitRepository } from "../src/git/git.js";
 import { checkIntegrity } from "../src/integrity/integrity.js";
 import { applyUpgrade, planUpgrade } from "../src/upgrade/upgrade.js";
-import { saveState } from "../src/state/store.js";
+import { loadState, saveState } from "../src/state/store.js";
 import { startSdd } from "../src/work/sdd.js";
 import { prepareTask } from "../src/work/tasks.js";
 
@@ -205,7 +205,22 @@ describe("adapter installation", () => {
     expect(run({ tool_name: "apply_patch", tool_input: { patch: "*** Add File: .ways/sdd/x/reviews/latest.json\n+{}\n" }, cwd })).toBe(2);
     expect(run({ tool_name: "Write", tool_input: { file_path: join(cwd, "new", "deep", "file.ts") }, cwd })).toBe(2);
     expect(run({ tool_name: "NotebookEdit", tool_input: { notebook_path: join(cwd, "n.ipynb") }, cwd })).toBe(2);
+    expect(run({ tool_name: "Bash", tool_input: { command: "printf bad > src.ts" }, cwd })).toBe(2);
+    expect(run({ tool_name: "Bash", tool_input: { command: "node -e \"require('node:fs').writeFileSync('src.ts', 'bad')\"" }, cwd })).toBe(2);
+    expect(run({ tool_name: "Bash", tool_input: { command: "printf 'Goal: x' > .ways/sdd/deleg/implement.md" }, cwd })).toBe(0);
+    expect(run({ tool_name: "Bash", tool_input: { command: "npx ways sdd advance" }, cwd })).toBe(0);
     expect(run({ tool_name: "Read", tool_input: { file_path: join(cwd, "src.ts") }, cwd })).toBe(0);
+    for (const phase of ["review", "validate"] as const) {
+      const current = await loadState(cwd);
+      if (!current) throw new Error("missing delegated test state");
+      await saveState(cwd, { ...current, phase });
+      expect(run(edit(cwd))).toBe(2);
+      expect(run({ tool_name: "Bash", tool_input: { command: "tee src.ts" }, cwd })).toBe(2);
+      expect(run({ tool_name: "Bash", tool_input: { command: `printf 'Goal: x' > .ways/sdd/deleg/${phase}.md` }, cwd })).toBe(0);
+    }
+    const current = await loadState(cwd);
+    if (!current) throw new Error("missing delegated test state");
+    await saveState(cwd, { ...current, phase: "implement" });
     await git.commit(await git.changedPaths(), "sdd(decompose): complete deleg", { work: "deleg", phase: "decompose", state: "completed" });
     const task = await prepareTask(cwd, "api");
     expect(run(edit(task.worktree!))).toBe(0);

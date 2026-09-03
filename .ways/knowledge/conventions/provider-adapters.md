@@ -16,6 +16,6 @@ sources:
 
 The canonical source for everything an agent provider sees lives in `assets/adapters/`: commands, roles, statusline and guard. Provider names never appear there; the source uses `{{command:x}}` and `{{role:x}}` placeholders that each renderer resolves.
 
-Bootstrap renders Claude, Codex, Cursor and pi. A renderer is a pure function from source to files plus an idempotent `merge` for shared settings and a structural `verify` for what cannot be hashed. Codex commands are repository skills, Cursor commands are skills, and pi commands, roles and its guard/status extension live under `.pi/`. Rendered files are hashed in the manifest and re-rendered by upgrade.
+Bootstrap renders Claude, Codex, Cursor and pi. A renderer is a pure function from source to files plus an idempotent `merge` for shared settings and a structural `verify` for what cannot be hashed. Codex commands are repository skills, Cursor commands are skills, and pi commands, roles and its guard/status extension live under `.pi/`. The shared guard protects delegated main-worktree production files throughout implement, review and validate without blocking task worktrees or Ways orchestration. Rendered files are hashed in the manifest and re-rendered by upgrade.
 
 Role prompts are limited to six non-empty lines; the loader rejects longer ones. Read-only roles (explorer, reviewer) render with restricted tools. The orchestrator is never a subagent; it is the main session acting under `AGENTS.md`. Advancing, finishing and cancelling are agent actions, not user commands.

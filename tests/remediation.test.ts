@@ -1,8 +1,9 @@
 import { mkdtemp, mkdir, readFile, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import { bootstrap } from "../src/bootstrap/bootstrap.js";
+import { run } from "../src/cli.js";
 import type { RemediationTarget, WorkState } from "../src/domain/types.js";
 import { GitRepository } from "../src/git/git.js";
 import { loadState, saveState } from "../src/state/store.js";
@@ -133,6 +134,22 @@ describe("SDD remediation transitions", { timeout: 120_000 }, () => {
     } else {
       expect(record.evidence.failures).toContainEqual(expect.objectContaining({ check: "configured-tests" }));
     }
+  });
+
+  it("opens a remediation from the CLI and projects its attempt in status", async () => {
+    const { cwd } = await reviewRepository();
+    const log = vi.spyOn(console, "log").mockImplementation(() => undefined);
+    try {
+      expect(await run(["sdd", "remediate", "implement", "--reason=address review findings"], cwd)).toBe(0);
+      expect(log).toHaveBeenCalledWith(expect.stringMatching(/^SDD remediation opened: .+ \(attempt 1, review -> implement\)\.$/));
+    } finally {
+      log.mockRestore();
+    }
+    expect((await loadState(cwd))?.attempt).toBe(1);
+    await expect((await import("../src/state/status.js")).readStatus(cwd)).resolves.toMatchObject({
+      attempt: 1, remediation: { source: "review", target: "implement", reason: "address review findings" },
+    });
+    await expect(run(["sdd", "remediate", "implement"], cwd)).rejects.toThrow(/Usage: ways sdd remediate/);
   });
 
   it("rejects stale review evidence and unrelated staged or dirty content without mutation", async () => {

@@ -18,3 +18,5 @@
 16. A supervised human gate only advances with an approval bound to work, phase, gate commit and content digest; `ways approve` refuses without a TTY, the profile cannot be flipped on disk, and any later edit invalidates the approval.
 17. A review is accepted only with the current diff digest and blocks the gate if the content changes afterwards.
 18. Bootstrap renders Claude, Codex, Cursor and pi adapters; each ships the guard, read-only role markers and merged hook files, and integrity reports a removed guard hook.
+19. Failed review or validation can reopen only through evidence-gated `ways sdd remediate`; each remediation is additive, attempt-scoped, and preserves prior artifacts.
+20. Delegated provider guards block main-worktree production writes (including shell write attacks) during implement, review, and validate, while task worktrees and Ways orchestration remain usable.

@@ -16,6 +16,7 @@ import { cancelQuick, finishQuick, startQuick } from "../src/work/quick.js";
 import { integrateTask, prepareTask } from "../src/work/tasks.js";
 import { saveState } from "../src/state/store.js";
 import { advanceSdd, startSdd } from "../src/work/sdd.js";
+import type { WorkState } from "../src/domain/types.js";
 
 async function repository(): Promise<{ cwd: string; git: GitRepository }> {
   const cwd = await mkdtemp(join(tmpdir(), "ways-enforce-"));
@@ -63,6 +64,23 @@ describe("status artifact", () => {
     const { cwd } = await repository();
     await startSdd(cwd, "guarded", "supervised");
     expect(await readStatus(cwd)).toMatchObject({ phase: "intake", profile: "supervised", humanGate: true });
+  });
+
+  it("adds remediation metadata only after attempt zero", () => {
+    const now = new Date().toISOString();
+    const state: WorkState = {
+      schemaVersion: 1, harnessVersion: "test", id: "reopened", mode: "sdd", status: "active",
+      profile: "autonomous", execution: "delegated", phase: "implement", baseCommit: "a".repeat(40), gateCommit: "b".repeat(40),
+      createdAt: now, updatedAt: now, tasks: [], attempt: 1,
+      remediation: {
+        source: "review", target: "implement", reason: "address findings", priorCheckpoint: "b".repeat(40), attempt: 1, timestamp: now,
+        evidence: { kind: "review", review: { schemaVersion: 1, workId: "reopened", reviewer: "reviewer", digest: "digest", verdict: "fail", findings: [] } },
+      },
+    };
+    expect(projectStatus(state)).toMatchObject({ attempt: 1, remediation: { source: "review", target: "implement", reason: "address findings" } });
+    const legacy = projectStatus({ ...state, attempt: 0, remediation: undefined });
+    expect(legacy).not.toHaveProperty("attempt");
+    expect(legacy).not.toHaveProperty("remediation");
   });
 
   it("fails integrity when the artifact diverges", async () => {

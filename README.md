@@ -78,9 +78,9 @@ intake → explore → assess → specify → plan → decompose
 → implement → review → validate → reconcile-memory → close
 ```
 
-Each transition validates the previous certification in Git, updates JSON state, and creates an atomic commit with machine-readable trailers. `assess` can explicitly downgrade small work to `quick` or `plan`.
+Each transition validates the previous certification in Git, updates JSON state, and creates an atomic commit with machine-readable trailers. `assess` can explicitly downgrade small work to `quick` or `plan`. A failed review or validation can reopen a preserved work with `npx ways sdd remediate <implement|decompose|plan|specify> --reason=<text>`; this records failure evidence, starts a new attempt, and never rewrites the prior attempt.
 
-SDD runs `inline` (the agent may implement itself) or `--delegated` (the session is the orchestrator and never edits code: implementation always arrives through subagent task worktrees, integrated in dependency order, in parallel when independent). The implement gate in delegated mode rejects any commit that was not integrated from a task, and the Claude guard blocks `Edit`/`Write` in the main worktree during that phase.
+SDD runs `inline` (the agent may implement itself) or `--delegated` (the session is the orchestrator and never edits production code: implementation always arrives through subagent task worktrees, integrated in dependency order, in parallel when independent). The implement gate in delegated mode rejects any commit that was not integrated from a task. Provider guards block main-worktree production writes, including write-like shell commands, throughout delegated `implement`, `review`, and `validate`, while allowing phase artifacts, Ways orchestration, and task worktrees.
 
 Parallel tasks run in isolated worktrees. The core creates task packets and integrates traced commits, but deliberately does not launch agents. Review is delegated, read-only, severity-gated, and required even when implementation is inline. The review JSON carries the digest printed by `ways review digest`; submit and the gate recompute it, so a review dies with any later edit.
 
@@ -121,7 +121,7 @@ Compliance does not depend on the agent obeying its prompt:
 
 `assets/adapters/` is the canonical source: five commands, five roles (explorer, implementer, reviewer, qa, sweeper) with prompts of at most six lines, a statusline script, and a commit guard. The orchestrator is not a subagent: it is the main agent the human talks to, instructed by `AGENTS.md`. Bootstrap renders every registered provider from that source; `ways adapter install <provider> [--force]` regenerates one. Rendered files are hashed in the manifest, verified by integrity, and re-rendered by `ways upgrade` after checklist approval.
 
-Each adapter follows the provider's current official documentation. Every one ships the same guard script fed with JSON on stdin: it blocks `git commit` without an active work and blocks edits in the main worktree during delegated implementation.
+Each adapter follows the provider's current official documentation. Every one ships the same guard script fed with JSON on stdin: it blocks `git commit` without an active work and blocks main-worktree production writes during delegated implementation, review, and validation.
 
 | Provider | Commands | Roles | Guard | Status |
 | --- | --- | --- | --- | --- |
@@ -134,7 +134,7 @@ Provider notes: Codex and Cursor only load project hooks in trusted projects, an
 
 ## Observable status
 
-`.ways/status.json` is a tracked, derived projection of the active state: `active`, `mode`, `id`, `status`, `phase`, `profile`, `humanGate`, `gateCommit`, `updatedAt`. It is rewritten on every transition, verified by integrity, and cheap to read from any agent statusline. `ways status --json` prints the same object.
+`.ways/status.json` is a tracked, derived projection of the active state: `active`, `mode`, `id`, `status`, `phase`, `profile`, `humanGate`, `gateCommit`, `updatedAt`, and, for remediation attempts after attempt zero, `attempt` plus `remediation`. It is rewritten on every transition, verified by integrity, and cheap to read from any agent statusline. `ways status --json` prints the same object. Attempt-zero output keeps its original shape.
 
 Upgrades compare managed-file hashes and never overwrite modified files without checklist approval.
 

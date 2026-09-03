@@ -19,6 +19,7 @@ import { cancelQuick, finishQuick, startQuick } from "./work/quick.js";
 import { approveInteractively } from "./work/approve.js";
 import { reviewDigest, submitReview } from "./work/review.js";
 import { advanceSdd, downgradeSdd, startSdd } from "./work/sdd.js";
+import { remediateSdd } from "./work/remediation.js";
 import { addTask, integrateTask, prepareTask } from "./work/tasks.js";
 import { applyUpgrade, planUpgrade } from "./upgrade/upgrade.js";
 
@@ -148,7 +149,18 @@ export async function run(argv: readonly string[], cwd = process.cwd()): Promise
       console.log(`SDD downgraded: ${await downgradeSdd(cwd, id)}`);
       return 0;
     }
-    throw new Error("Usage: ways sdd start <id> [--supervised] [--delegated] | advance | downgrade <quick|plan>");
+    if (action === "remediate") {
+      if (id !== "implement" && id !== "decompose" && id !== "plan" && id !== "specify") {
+        throw new Error("Usage: ways sdd remediate <implement|decompose|plan|specify> --reason=<text>");
+      }
+      const reason = args.find((arg) => arg.startsWith("--reason="))?.slice(9);
+      if (!reason?.trim()) throw new Error("Usage: ways sdd remediate <implement|decompose|plan|specify> --reason=<text>");
+      const commit = await remediateSdd(cwd, id, reason);
+      const state = await loadState(cwd);
+      console.log(`SDD remediation opened: ${commit} (attempt ${state?.attempt ?? 0}, ${state?.remediation?.source ?? "unknown"} -> ${id}).`);
+      return 0;
+    }
+    throw new Error("Usage: ways sdd start <id> [--supervised] [--delegated] | advance | remediate <implement|decompose|plan|specify> --reason=<text> | downgrade <quick|plan>");
   }
 
   if (command === "adapter") {

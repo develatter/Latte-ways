@@ -1,7 +1,7 @@
 import { readFile } from "node:fs/promises";
 import { join } from "node:path";
 import { STATUS_PATH } from "../domain/constants.js";
-import type { ApprovalProfile, ExecutionMode, Mode, SddPhase, WorkState, WorkStatus } from "../domain/types.js";
+import type { ApprovalProfile, ExecutionMode, Mode, RemediationMetadata, SddPhase, WorkState, WorkStatus } from "../domain/types.js";
 import { stableJson, writeAtomic } from "../fs/files.js";
 import { GitRepository } from "../git/git.js";
 
@@ -18,6 +18,9 @@ export interface StatusSummary {
   execution?: ExecutionMode;
   humanGate?: boolean;
   gateCommit?: string;
+  /** Omitted for attempt zero so existing status consumers retain their v1 shape. */
+  attempt?: number;
+  remediation?: RemediationMetadata;
   updatedAt: string;
 }
 
@@ -38,6 +41,8 @@ export function projectStatus(state: WorkState | undefined, now = new Date().toI
   }
   if (state.profile) summary.profile = state.profile;
   if (state.execution) summary.execution = state.execution;
+  if (state.attempt && state.attempt > 0) summary.attempt = state.attempt;
+  if (state.remediation && state.attempt && state.attempt > 0) summary.remediation = state.remediation;
   return summary;
 }
 

@@ -1,10 +1,9 @@
 #!/usr/bin/env sh
 # Managed by latte-ways. Blocks agent-issued git commits when no harness work is active,
-# blocks file edits in the main worktree while a delegated SDD implement phase is running,
+# blocks production writes in the main worktree during delegated SDD delivery phases,
 # and blocks any tool write to human approvals or review verdicts.
 input="$(cat)"
-case "$input" in *commit*|*Edit*|*Write*|*apply_patch*|*approvals*|*reviews*) ;; *) exit 0 ;; esac
-command -v node >/dev/null 2>&1 || { echo "ways: node not found; refusing to run git commit without the guard" >&2; exit 2; }
+command -v node >/dev/null 2>&1 || { echo "ways: node not found; refusing guarded tool use" >&2; exit 2; }
 printf '%s' "$input" | exec node -e '
 let data = "";
 process.stdin.on("data", (chunk) => { data += chunk; }).on("end", () => {
@@ -16,21 +15,19 @@ process.stdin.on("data", (chunk) => { data += chunk; }).on("end", () => {
   const option = "(?:-[^\\s]+\\s+(?:[^-\\s][^\\s]*\\s+)?)*";
   const prefix = "(?:(?:command|exec|builtin)\\s+|[^\\s;&|(`]*/)?";
   const commits = new RegExp("(?:^|[;&|(`\\x22\\x27]\\s*|\\$\\(\\s*)" + prefix + "git\\s+" + option + "commit(?:\\s|$)", "m");
-  const evidence = /\.ways\/sdd\/[^\/\s]+\/(approvals|reviews)(\/|$)/;
+  const evidence = /(?:^|[\s/])\.ways\/sdd\/[^\/\s]+\/(?:attempts\/[0-9]+\/)?(?:approvals|reviews)(?:\/|$)/;
   const edited = event.tool_input?.file_path ?? event.tool_input?.notebook_path ?? event.tool_input?.path;
   const patch = String(event.tool_input?.patch ?? event.tool_input?.input ?? "");
   const patchPaths = [...patch.matchAll(/^\*\*\* (?:Add|Update|Delete) File: (.+)$|^\*\*\* Move to: (.+)$/gm)].map((match) => match[1] ?? match[2]);
-  const targetPath = typeof edited === "string" ? edited : patchPaths[0];
-  const writes = /(>|\b(tee|cp|mv|rm|ln|dd|touch|install|rsync|python3?|node|perl|ruby)\b|\bsed\b[^|;&]*\s-[a-zA-Z]*i)/;
-  if ((edits && ((typeof edited === "string" && evidence.test(edited)) || patchPaths.some((path) => evidence.test(path)))) || (!edits && evidence.test(command) && writes.test(command))) {
-    process.stderr.write("ways: approvals and review verdicts are written only by `ways approve` and `ways review submit`\n");
-    process.exit(2);
-  }
-  if (!edits && !commits.test(command)) process.exit(0);
+  const targetPaths = [typeof edited === "string" ? edited : undefined, ...patchPaths].filter((path) => typeof path === "string");
+  const writes = /(?:>|\b(tee|cp|mv|rm|ln|dd|touch|install|rsync|truncate|vi|vim|nano|ed)\b|\bsed\b[^|;&]*\s-[a-zA-Z]*i|\b(?:python3?|node|perl|ruby|php|lua|awk)\b|\bgit\s+(?:apply|checkout|restore|reset)\b)/;
+  const shellControl = /(?:[;&|`]|\$\()/;
+  const waysCommand = /^\s*(?:(?:command|exec|env)\s+)*(?:npx(?:\s+--no-install)?\s+ways|node\s+(?:(?:\.?\/?|[^\s]+\/)dist\/)?cli\.js)\b/.test(command) && !shellControl.test(command);
   const { execFileSync } = require("node:child_process");
-  const { existsSync, readFileSync } = require("node:fs");
-  const { dirname, resolve } = require("node:path");
-  let target = edits && typeof targetPath === "string" ? dirname(resolve(String(event.cwd ?? process.cwd()), targetPath)) : String(event.cwd ?? process.cwd());
+  const { existsSync, readFileSync, realpathSync } = require("node:fs");
+  const { basename, dirname, join, resolve } = require("node:path");
+  const cwd = String(event.cwd ?? process.cwd());
+  let target = edits && typeof targetPaths[0] === "string" ? dirname(resolve(cwd, targetPaths[0])) : cwd;
   while (!existsSync(target) && dirname(target) !== target) target = dirname(target);
   let root;
   try { root = execFileSync("git", ["rev-parse", "--show-toplevel"], { cwd: target, encoding: "utf8", stdio: ["ignore", "pipe", "ignore"] }).trim(); } catch { process.exit(0); }
@@ -38,16 +35,37 @@ process.stdin.on("data", (chunk) => { data += chunk; }).on("end", () => {
   if (!existsSync(file)) process.exit(0);
   let status;
   try { status = JSON.parse(readFileSync(file, "utf8")); } catch { process.exit(0); }
-  if (edits) {
-    if (existsSync(`${root}/.ways/runtime/task.json`)) process.exit(0);
-    if (status.mode === "sdd" && status.execution === "delegated" && status.phase === "implement") {
-      process.stderr.write("ways: delegated execution; the orchestrator must not edit code. Prepare a task worktree and delegate to {{role:implementer}}\n");
+  const resolvePath = (path) => {
+    let candidate = resolve(cwd, String(path));
+    const missing = [];
+    while (!existsSync(candidate) && dirname(candidate) !== candidate) { missing.unshift(basename(candidate)); candidate = dirname(candidate); }
+    try { return join(realpathSync(candidate), ...missing); } catch { return resolve(cwd, String(path)); }
+  };
+  const phaseArtifact = (path) => new RegExp(`^${root.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}/\.ways/sdd/[a-z0-9][a-z0-9-]{0,62}/(?:attempts/[1-9][0-9]*/)?(?:intake|explore|assess|specify|plan|decompose|implement|review|validate|reconcile-memory|close)\.md$`).test(resolvePath(path));
+  const artifactRedirections = () => {
+    const paths = [...command.matchAll(/(?:>>|<>|>)\s*([^\s;&|]+)/g)].map((match) => match[1]?.replace(/^["\x27]|["\x27]$/g, ""));
+    return paths.length > 0 && paths.every((path) => path && phaseArtifact(path));
+  };
+  const artifactTee = () => {
+    const match = command.match(/\btee(?:\s+-[a-zA-Z]+)*\s+([^\s;&|]+)/);
+    return Boolean(match?.[1] && phaseArtifact(match[1].replace(/^["\x27]|["\x27]$/g, "")) && !shellControl.test(command));
+  };
+  const artifactShellWrite = artifactRedirections() || artifactTee();
+  if ((edits && targetPaths.some((path) => evidence.test(resolvePath(path)))) || (!edits && evidence.test(command) && writes.test(command) && !waysCommand)) {
+    process.stderr.write("ways: approvals and review verdicts are written only by `ways approve` and `ways review submit`\\n");
+    process.exit(2);
+  }
+  const protectedPhase = status.mode === "sdd" && status.execution === "delegated" && ["implement", "review", "validate"].includes(status.phase);
+  if (protectedPhase && !existsSync(`${root}/.ways/runtime/task.json`)) {
+    const productionEdit = edits && (targetPaths.length === 0 || targetPaths.some((path) => !phaseArtifact(path)));
+    const productionShellWrite = !edits && writes.test(command) && !waysCommand && !artifactShellWrite;
+    if (productionEdit || productionShellWrite) {
+      process.stderr.write("ways: delegated execution; the orchestrator must not write production files during implement, review, or validate. Use a task worktree or ways orchestration.\\n");
       process.exit(2);
     }
-    process.exit(0);
   }
-  if (status.active === false) {
-    process.stderr.write("ways: no active work; open one with {{command:quick}}, {{command:plan}} or {{command:sdd}} before committing\n");
+  if (!edits && commits.test(command) && status.active === false) {
+    process.stderr.write("ways: no active work; open one with {{command:quick}}, {{command:plan}} or {{command:sdd}} before committing\\n");
     process.exit(2);
   }
   process.exit(0);
