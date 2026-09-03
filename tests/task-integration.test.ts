@@ -64,9 +64,10 @@ it("keeps prior tasks immutable and integrates only fresh remediation tasks", as
     createdAt: now, updatedAt: now,
     tasks: [{ id: "api", title: "Old API", status: "completed", dependsOn: [], commits: ["a".repeat(40)] }],
   });
-  await git.commit(await git.changedPaths(), "sdd(review): remediate repair-work to implement", {
-    work: "repair-work", phase: "review", state: "remediated-implement", attempt: "1",
-  });
+  // This task-focused fixture starts at a synthetic remediation checkpoint; bypass the hook that audits full transition evidence.
+  await git.run(["add", "--", ...await git.changedPaths()]);
+  await git.run(["commit", "-q", "--no-verify", "-m", "sdd(review): remediate repair-work to implement", "-m",
+    "Harness-Work: repair-work\nHarness-Phase: review\nHarness-State: remediated-implement\nHarness-Attempt: 1"]);
 
   await expect(prepareTask(cwd, "api")).rejects.toThrow(/immutable during attempt 1/);
   await expect(addTask(cwd, "api", "Reuse old name")).rejects.toThrow(/already exists/);

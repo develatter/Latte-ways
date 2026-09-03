@@ -1,12 +1,12 @@
 import { readFile } from "node:fs/promises";
 import { MANIFEST_PATH, STATE_PATH } from "../domain/constants.js";
-import type { WorkState } from "../domain/types.js";
-import { validateState } from "../domain/validation.js";
+import type { RemediationRecord, WorkState } from "../domain/types.js";
+import { validateApproval, validateRemediation, validateState } from "../domain/validation.js";
 import { GitRepository, parseTrailers } from "../git/git.js";
 import { loadState } from "../state/store.js";
 import { approvalBinds, approvalPath, requiresApproval } from "../work/approve.js";
+import { attemptNumber, remediationRecordPath } from "../work/attempt.js";
 import { committedMismatch } from "../work/sdd.js";
-import { validateApproval } from "../domain/validation.js";
 
 export interface HookVerdict {
   accepted: boolean;
@@ -31,7 +31,7 @@ async function stagesStateDeletion(git: GitRepository): Promise<boolean> {
 
 /** A certification of a supervised human gate must carry a matching approval artifact in the same commit. */
 async function stagedApprovalFailure(git: GitRepository, work: WorkState, committed: WorkState | undefined, phase: string): Promise<string | undefined> {
-  const path = approvalPath(work.id, phase);
+  const path = approvalPath(work.id, phase, work.attempt);
   let value: unknown;
   try {
     value = JSON.parse(await git.run(["show", `:${path}`]));
@@ -40,12 +40,12 @@ async function stagedApprovalFailure(git: GitRepository, work: WorkState, commit
   }
   if (!validateApproval(value)) return `staged approval at ${path} is invalid`;
   // The approval was written against the gate recorded by the state committed at HEAD.
-  return approvalBinds(value, { workId: work.id, phase, gateCommit: committed?.gateCommit ?? await git.head() });
+  return approvalBinds(value, { workId: work.id, phase, gateCommit: committed?.gateCommit ?? await git.head(), attempt: work.attempt });
 }
 
 /** The close gate removes the SDD folder, so its approval must be present at HEAD's working tree and staged for deletion. */
 async function deletedApprovalFailure(git: GitRepository, work: WorkState): Promise<string | undefined> {
-  const path = approvalPath(work.id, "close");
+  const path = approvalPath(work.id, "close", work.attempt);
   const deleted = (await git.run(["diff", "--cached", "--name-only", "--diff-filter=D", "--", path])).split("\n").includes(path);
   if (!deleted) return `closing commit must stage the deletion of a committed approval at ${path}`;
   let value: unknown;
@@ -55,7 +55,41 @@ async function deletedApprovalFailure(git: GitRepository, work: WorkState): Prom
     return `approval at ${path} is not committed at HEAD`;
   }
   if (!validateApproval(value)) return `approval at ${path} is invalid`;
-  return approvalBinds(value, { workId: work.id, phase: "close", gateCommit: work.gateCommit });
+  return approvalBinds(value, { workId: work.id, phase: "close", gateCommit: work.gateCommit, attempt: work.attempt });
+}
+
+function trailerAttemptMatches(value: string | undefined, attempt: number | undefined): boolean {
+  const expected = attemptNumber(attempt);
+  return expected === 0 ? value === undefined || value === "0" : value === String(expected);
+}
+
+async function stagedRemediationFailure(git: GitRepository, active: WorkState, committed: WorkState | undefined): Promise<string | undefined> {
+  const remediation = active.remediation;
+  const attempt = attemptNumber(active.attempt);
+  if (!committed || committed.mode !== "sdd" || !remediation || attempt === 0 || remediation.attempt !== attempt) {
+    return "remediation state is incomplete";
+  }
+  if ((committed.phase !== "review" && committed.phase !== "validate") || remediation.source !== committed.phase
+    || active.phase !== remediation.target || attempt !== attemptNumber(committed.attempt) + 1
+    || remediation.priorCheckpoint !== await git.head() || active.gateCommit !== remediation.priorCheckpoint) {
+    return "remediation state does not form the next legal transition";
+  }
+  const path = remediationRecordPath(active.id, attempt);
+  const added = (await git.run(["diff", "--cached", "--name-only", "--diff-filter=A", "--", path])).split("\n").includes(path);
+  let record: RemediationRecord | undefined;
+  try {
+    const value: unknown = JSON.parse(await git.run(["show", `:${path}`]));
+    if (validateRemediation(value)) record = value;
+  } catch {
+    // Report a stable failure below.
+  }
+  if (!added || !record || record.workId !== active.id || record.source !== remediation.source || record.target !== remediation.target
+    || record.attempt !== attempt || record.priorCheckpoint !== remediation.priorCheckpoint
+    || JSON.stringify(record.evidence) !== JSON.stringify(remediation.evidence)
+    || record.reason !== remediation.reason || record.timestamp !== remediation.timestamp) {
+    return `must stage matching remediation evidence at ${path}`;
+  }
+  return undefined;
 }
 
 async function headHasManifest(git: GitRepository): Promise<boolean> {
@@ -78,6 +112,17 @@ export async function judgeCommitMessage(cwd: string, message: string): Promise<
       const opening = trailers.state === "opened" && !committed;
       const mismatch = opening ? undefined : committedMismatch(committed, active);
       if (mismatch) return { accepted: false, reason: `${mismatch}; run ways repair` };
+      if (!trailerAttemptMatches(trailers.attempt, active.attempt)) {
+        return { accepted: false, reason: `Commit attempt does not match active remediation attempt ${attemptNumber(active.attempt)}` };
+      }
+      if (trailers.state?.startsWith("remediated")) {
+        const remediation = active.remediation;
+        if (!trailers.state.startsWith("remediated-") || !remediation || trailers.phase !== remediation.source || trailers.state !== `remediated-${remediation.target}`) {
+          return { accepted: false, reason: "Remediation trailers do not match active remediation state" };
+        }
+        const failure = await stagedRemediationFailure(git, active, committed);
+        if (failure) return { accepted: false, reason: `Remediation of ${active.id}: ${failure}` };
+      }
       const certified = active.lastCompletedPhase;
       const certifying = trailers.state === "completed" && certified !== undefined && trailers.phase === certified;
       if (certifying && requiresApproval({ ...active, phase: certified })) {
@@ -93,7 +138,7 @@ export async function judgeCommitMessage(cwd: string, message: string): Promise<
   if (closing) {
     const traced = trailers.work === closing.id && trailers.state !== undefined && CLOSING_STATES.has(trailers.state);
     const phased = closing.mode !== "sdd" || trailers.state === "cancelled" || trailers.phase === "close";
-    if (traced && phased && await stagesStateDeletion(git)) {
+    if (traced && phased && trailerAttemptMatches(trailers.attempt, closing.attempt) && await stagesStateDeletion(git)) {
       if (trailers.phase === "close" && requiresApproval({ ...closing, phase: "close" })) {
         const failure = await deletedApprovalFailure(git, closing);
         if (failure) return { accepted: false, reason: `Human gate close of ${closing.id}: ${failure}` };

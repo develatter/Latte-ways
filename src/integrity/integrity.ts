@@ -2,7 +2,7 @@ import { lstat, readFile, readlink } from "node:fs/promises";
 import { join } from "node:path";
 import { CONFIG_PATH, INDEX_DIR, KNOWLEDGE_DIR, MANIFEST_PATH, STATE_PATH, STATUS_PATH } from "../domain/constants.js";
 import type { ManagedManifest, WorkState } from "../domain/types.js";
-import { validateConfig, validateManifest, validateState } from "../domain/validation.js";
+import { validateConfig, validateManifest, validateRemediation, validateState } from "../domain/validation.js";
 import { sha256 } from "../fs/files.js";
 import { indexesMatch } from "../knowledge/indexes.js";
 import { inspectOkf } from "../knowledge/okf.js";
@@ -10,7 +10,8 @@ import { GitRepository } from "../git/git.js";
 import { providerById } from "../adapters/install.js";
 import { readStatus, statusMatches } from "../state/status.js";
 import { commitsAfter } from "./history.js";
-import { isOpeningCommit } from "../work/sdd.js";
+import { remediationRecordPath } from "../work/attempt.js";
+import { assertSddConsistency } from "../work/sdd.js";
 
 export interface IntegrityIssue {
   code: string;
@@ -95,19 +96,27 @@ export async function checkIntegrity(cwd: string): Promise<IntegrityIssue[]> {
     try {
       const git = new GitRepository(cwd);
       const head = await git.head();
-      for (const commit of await commitsAfter(git, activeState.baseCommit)) {
+      const activeCommits = await commitsAfter(git, activeState.baseCommit);
+      for (const commit of activeCommits) {
         if (commit.trailers.work !== activeState.id) {
           issues.push({ code: "work-untraced", path: commit.hash.slice(0, 12), message: `Commit "${commit.subject}" is not traced to work ${activeState.id}` });
         }
       }
-      if (activeState.mode === "sdd" && activeState.lastCompletedPhase) {
-        const certification = await git.findCertification(activeState.id, activeState.lastCompletedPhase);
-        if (!certification || !await git.isAncestor(certification.hash, head) || await git.parent(certification.hash) !== activeState.gateCommit) {
-          issues.push({ code: "state-git-divergence", path: STATE_PATH, message: "SDD state does not match certified Git history" });
+      if (activeState.mode === "sdd") {
+        await assertSddConsistency(cwd, activeState);
+        if (activeState.remediation && activeState.attempt) {
+          const path = remediationRecordPath(activeState.id, activeState.attempt);
+          const transition = await git.run(["log", "--diff-filter=A", "-1", "--format=%H", "--", path]);
+          const value: unknown = JSON.parse(await git.run(["show", `${transition}:${path}`]));
+          if (!validateRemediation(value) || value.workId !== activeState.id || value.attempt !== activeState.attempt
+            || value.source !== activeState.remediation.source || value.target !== activeState.remediation.target
+            || value.priorCheckpoint !== activeState.remediation.priorCheckpoint || value.reason !== activeState.remediation.reason
+            || value.timestamp !== activeState.remediation.timestamp
+            || JSON.stringify(value.evidence) !== JSON.stringify(activeState.remediation.evidence)) {
+            throw new Error("Active remediation evidence does not match state");
+          }
         }
-      } else if (activeState.mode === "sdd" && await isOpeningCommit(git, activeState, head)) {
-        // Supervised work opened with its traced commit.
-      } else if (activeState.mode === "sdd" || activeState.mode === "quick") {
+      } else if (activeState.mode === "quick") {
         if (head !== activeState.baseCommit) issues.push({ code: "state-git-divergence", path: STATE_PATH, message: "Work HEAD changed outside a gate" });
       } else if (activeState.mode === "plan" && head !== activeState.baseCommit) {
         const commit = await git.lastCommit();

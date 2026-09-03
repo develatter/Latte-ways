@@ -1,13 +1,26 @@
 import { MANIFEST_PATH } from "../domain/constants.js";
-import { SDD_PHASES, type SddPhase } from "../domain/types.js";
+import { SDD_PHASES, type RemediationRecord, type RemediationTarget, type SddPhase } from "../domain/types.js";
+import { validateRemediation } from "../domain/validation.js";
 import { loadConfig } from "../config/config.js";
 import { GitRepository, type CommitInfo } from "../git/git.js";
 import { loadState } from "../state/store.js";
+import { remediationRecordPath } from "../work/attempt.js";
 import type { IntegrityIssue } from "./integrity.js";
 
 export interface HistoryOptions {
   since?: string;
 }
+
+export interface HistoryCheckpoint {
+  work: string;
+  attempt: number;
+  kind: "certification" | "remediation";
+  commit: CommitInfo;
+  phase: SddPhase;
+  target?: RemediationTarget;
+}
+
+const REMEDIATION_TARGETS = new Set<RemediationTarget>(["implement", "decompose", "plan", "specify"]);
 
 export async function manifestIntroduction(git: GitRepository): Promise<string | undefined> {
   const output = await git.run(["log", "--format=%H", "--diff-filter=A", "--", MANIFEST_PATH]);
@@ -33,33 +46,118 @@ export async function commitsAfter(git: GitRepository, anchor: string): Promise<
   return commits;
 }
 
-export function auditCommits(commits: readonly CommitInfo[], activeId?: string): IntegrityIssue[] {
+interface ReplayState {
+  attempt: number;
+  nextPhase: SddPhase;
+}
+
+function issue(issues: IntegrityIssue[], commit: CommitInfo, code: string, message: string): void {
+  issues.push({ code, path: commit.hash.slice(0, 12), message });
+}
+
+function parsedAttempt(value: string | undefined): number | undefined {
+  if (value === undefined) return 0;
+  if (!/^(?:0|[1-9]\d*)$/.test(value)) return undefined;
+  const attempt = Number(value);
+  return Number.isSafeInteger(attempt) ? attempt : undefined;
+}
+
+/** Replay ordered SDD history. A set is insufficient because repeated and backward gates are invalid. */
+export function replayCommits(commits: readonly CommitInfo[], activeId?: string): { issues: IntegrityIssue[]; checkpoints: HistoryCheckpoint[] } {
   const issues: IntegrityIssue[] = [];
-  const certified = new Map<string, Set<SddPhase>>();
+  const checkpoints: HistoryCheckpoint[] = [];
+  const replay = new Map<string, ReplayState>();
   const opened = new Map<string, string>();
+
   for (const commit of commits) {
     const { work, phase, state } = commit.trailers;
-    const path = commit.hash.slice(0, 12);
     if (!work || (!state && !commit.trailers.task)) {
-      issues.push({ code: "history-untraced", path, message: `Commit "${commit.subject}" lacks Harness-Work with Harness-State or Harness-Task trailers` });
+      issue(issues, commit, "history-untraced", `Commit "${commit.subject}" lacks Harness-Work with Harness-State or Harness-Task trailers`);
       continue;
     }
-    if (state === "opened") opened.set(work, path);
+    if (state === "opened") opened.set(work, commit.hash.slice(0, 12));
     else if (state === "completed" || state === "cancelled") opened.delete(work);
-    if (state !== "completed" || !phase || !SDD_PHASES.includes(phase as SddPhase)) continue;
-    const completed = phase as SddPhase;
-    const previous = SDD_PHASES[SDD_PHASES.indexOf(completed) - 1];
-    const seen = certified.get(work) ?? new Set<SddPhase>();
-    if (previous && !seen.has(previous)) {
-      issues.push({ code: "history-broken-chain", path, message: `Certification of ${completed} for ${work} has no earlier ${previous} certification` });
+
+    const current = replay.get(work) ?? { attempt: 0, nextPhase: "intake" };
+    if (commit.trailers.task && parsedAttempt(commit.trailers.attempt) !== current.attempt) {
+      issue(issues, commit, "history-attempt-mismatch", `Task commit for ${work} does not belong to remediation attempt ${current.attempt}`);
+      continue;
     }
-    seen.add(completed);
-    certified.set(work, seen);
+    if (state === "approved" && (phase !== current.nextPhase || parsedAttempt(commit.trailers.attempt) !== current.attempt)) {
+      issue(issues, commit, "history-attempt-mismatch", `Approval commit for ${work} does not belong to the current phase and remediation attempt`);
+      continue;
+    }
+    const remediationMatch = state?.match(/^remediated-(.+)$/);
+    if (state?.startsWith("remediated") && !remediationMatch) {
+      issue(issues, commit, "history-invalid-remediation", `Remediation transition for ${work} has a malformed Harness-State trailer`);
+      continue;
+    }
+    if (remediationMatch) {
+      const target = remediationMatch[1] as RemediationTarget;
+      const attempt = parsedAttempt(commit.trailers.attempt);
+      if ((phase !== "review" && phase !== "validate") || phase !== current.nextPhase || !REMEDIATION_TARGETS.has(target)
+        || attempt === undefined || attempt !== current.attempt + 1) {
+        issue(issues, commit, "history-invalid-remediation", `Remediation transition for ${work} is not a legal ${current.nextPhase} attempt ${current.attempt + 1} transition`);
+        continue;
+      }
+      replay.set(work, { attempt, nextPhase: target });
+      checkpoints.push({ work, attempt, kind: "remediation", commit, phase: phase as SddPhase, target });
+      continue;
+    }
+
+    if (state !== "completed" || !phase || !SDD_PHASES.includes(phase as SddPhase)) continue;
+    const attempt = parsedAttempt(commit.trailers.attempt);
+    const completed = phase as SddPhase;
+    if (attempt === undefined || attempt !== current.attempt || completed !== current.nextPhase) {
+      issue(issues, commit, "history-broken-chain", `Certification of ${completed} for ${work} is out of order for attempt ${current.attempt}; expected ${current.nextPhase}`);
+      continue;
+    }
+    const next = SDD_PHASES[SDD_PHASES.indexOf(completed) + 1];
+    if (next) replay.set(work, { attempt: current.attempt, nextPhase: next });
+    else replay.delete(work);
+    checkpoints.push({ work, attempt, kind: "certification", commit, phase: completed });
   }
+
   for (const [work, path] of opened) {
     if (work !== activeId) issues.push({ code: "history-abandoned-opening", path, message: `Supervised work ${work} was opened but never certified or closed` });
   }
+  return { issues, checkpoints };
+}
+
+export function auditCommits(commits: readonly CommitInfo[], activeId?: string): IntegrityIssue[] {
+  return replayCommits(commits, activeId).issues;
+}
+
+async function remediationEvidenceIssues(git: GitRepository, checkpoints: readonly HistoryCheckpoint[]): Promise<IntegrityIssue[]> {
+  const issues: IntegrityIssue[] = [];
+  for (const checkpoint of checkpoints) {
+    if (checkpoint.kind !== "remediation" || !checkpoint.target) continue;
+    const path = remediationRecordPath(checkpoint.work, checkpoint.attempt);
+    let record: RemediationRecord | undefined;
+    try {
+      const added = (await git.run(["diff-tree", "--no-commit-id", "--name-only", "--diff-filter=A", "-r", checkpoint.commit.hash, "--", path])).split("\n").includes(path);
+      const value: unknown = JSON.parse(await git.run(["show", `${checkpoint.commit.hash}:${path}`]));
+      if (added && validateRemediation(value)) record = value;
+    } catch {
+      // Report one stable issue below.
+    }
+    let parent: string | undefined;
+    try {
+      parent = await git.parent(checkpoint.commit.hash);
+    } catch {
+      // A transition cannot be a root commit.
+    }
+    if (!record || record.workId !== checkpoint.work || record.source !== checkpoint.phase || record.target !== checkpoint.target
+      || record.attempt !== checkpoint.attempt || record.priorCheckpoint !== parent) {
+      issue(issues, checkpoint.commit, "history-invalid-remediation-evidence", `Remediation attempt ${checkpoint.attempt} for ${checkpoint.work} lacks matching transition evidence at ${path}`);
+    }
+  }
   return issues;
+}
+
+export async function auditHistory(git: GitRepository, commits: readonly CommitInfo[], activeId?: string): Promise<{ issues: IntegrityIssue[]; checkpoints: HistoryCheckpoint[] }> {
+  const replayed = replayCommits(commits, activeId);
+  return { ...replayed, issues: [...replayed.issues, ...await remediationEvidenceIssues(git, replayed.checkpoints)] };
 }
 
 export async function checkHistory(cwd: string, options: HistoryOptions = {}): Promise<IntegrityIssue[]> {
@@ -72,5 +170,5 @@ export async function checkHistory(cwd: string, options: HistoryOptions = {}): P
   } catch {
     // An unreadable state is reported by checkIntegrity.
   }
-  return auditCommits(await commitsAfter(git, anchor), activeId);
+  return (await auditHistory(git, await commitsAfter(git, anchor), activeId)).issues;
 }

@@ -1,8 +1,11 @@
 import { join } from "node:path";
-import { SDD_PHASES, type SddPhase, type WorkState } from "../domain/types.js";
+import { SDD_PHASES, type RemediationRecord, type SddPhase, type WorkState } from "../domain/types.js";
+import { validateRemediation } from "../domain/validation.js";
 import { STATE_PATH } from "../domain/constants.js";
 import { GitRepository } from "../git/git.js";
+import { auditHistory, commitsAfter, type HistoryCheckpoint } from "../integrity/history.js";
 import { loadState, removeState, saveState } from "../state/store.js";
+import { remediationRecordPath } from "../work/attempt.js";
 import { assertSddConsistency } from "../work/sdd.js";
 
 export interface RepairDiagnosis {
@@ -23,25 +26,64 @@ export async function diagnose(cwd: string): Promise<RepairDiagnosis> {
   }
 }
 
-async function latestCertification(git: GitRepository, work: string) {
-  return (await git.recentCommits()).find((commit) => commit.trailers.work === work && commit.trailers.state === "completed" && SDD_PHASES.includes(commit.trailers.phase as SddPhase));
+async function checkpointsAtHead(git: GitRepository, state: WorkState): Promise<HistoryCheckpoint[]> {
+  const replay = await auditHistory(git, await commitsAfter(git, state.baseCommit), state.id);
+  if (replay.issues.length > 0) {
+    throw new Error(`Git history cannot be adopted: ${replay.issues[0]!.message}`);
+  }
+  return replay.checkpoints.filter((checkpoint) => checkpoint.work === state.id);
+}
+
+async function remediationAt(git: GitRepository, checkpoint: HistoryCheckpoint): Promise<RemediationRecord> {
+  const path = remediationRecordPath(checkpoint.work, checkpoint.attempt);
+  const value: unknown = JSON.parse(await git.run(["show", `${checkpoint.commit.hash}:${path}`]));
+  if (!validateRemediation(value)) throw new Error(`Remediation record at ${path} is invalid`);
+  return value;
+}
+
+async function latestRemediation(git: GitRepository, checkpoints: readonly HistoryCheckpoint[], attempt: number): Promise<RemediationRecord | undefined> {
+  const checkpoint = [...checkpoints].reverse().find((candidate) => candidate.kind === "remediation" && candidate.attempt === attempt);
+  return checkpoint ? remediationAt(git, checkpoint) : undefined;
 }
 
 export async function adoptHead(cwd: string): Promise<WorkState | undefined> {
   const state = await loadState(cwd);
   if (!state || state.mode !== "sdd") throw new Error("Adopt-head requires active SDD state");
   const git = new GitRepository(cwd);
-  const certification = await latestCertification(git, state.id);
-  if (!certification?.trailers.phase) throw new Error("No SDD certification found in HEAD history");
-  const completed = certification.trailers.phase as SddPhase;
-  const next = SDD_PHASES[SDD_PHASES.indexOf(completed) + 1];
-  if (!next) {
-    await removeState(cwd);
-    return undefined;
+  const checkpoints = await checkpointsAtHead(git, state);
+  const checkpoint = checkpoints[checkpoints.length - 1];
+  if (!checkpoint) throw new Error("No SDD checkpoint found in HEAD history");
+
+  if (checkpoint.attempt === 0) delete state.attempt;
+  else state.attempt = checkpoint.attempt;
+  if (checkpoint.kind === "remediation") {
+    const record = await remediationAt(git, checkpoint);
+    state.phase = record.target;
+    delete state.lastCompletedPhase;
+    state.gateCommit = record.priorCheckpoint;
+    state.remediation = {
+      source: record.source, target: record.target, reason: record.reason, evidence: record.evidence,
+      priorCheckpoint: record.priorCheckpoint, attempt: record.attempt, timestamp: record.timestamp,
+    };
+  } else {
+    const next = SDD_PHASES[SDD_PHASES.indexOf(checkpoint.phase) + 1];
+    if (!next) {
+      await removeState(cwd);
+      return undefined;
+    }
+    state.lastCompletedPhase = checkpoint.phase as SddPhase;
+    state.phase = next;
+    state.gateCommit = await git.parent(checkpoint.commit.hash);
+    const remediation = await latestRemediation(git, checkpoints, checkpoint.attempt);
+    if (remediation) {
+      state.remediation = {
+        source: remediation.source, target: remediation.target, reason: remediation.reason, evidence: remediation.evidence,
+        priorCheckpoint: remediation.priorCheckpoint, attempt: remediation.attempt, timestamp: remediation.timestamp,
+      };
+    } else {
+      delete state.remediation;
+    }
   }
-  state.lastCompletedPhase = completed;
-  state.phase = next;
-  state.gateCommit = await git.parent(certification.hash);
   state.updatedAt = new Date().toISOString();
   await saveState(cwd, state);
   return state;
@@ -66,10 +108,11 @@ export async function rollbackToLastGate(cwd: string, discard: boolean): Promise
   const state = await loadState(cwd);
   if (!state || state.mode !== "sdd") throw new Error("Rollback requires active SDD state");
   const git = new GitRepository(cwd);
-  const certification = await latestCertification(git, state.id);
-  if (!certification) throw new Error("No completed gate found");
-  await git.run(["reset", "--hard", certification.hash]);
+  const checkpoints = await checkpointsAtHead(git, state);
+  const checkpoint = checkpoints[checkpoints.length - 1];
+  if (!checkpoint) throw new Error("No completed gate or remediation checkpoint found");
+  await git.run(["reset", "--hard", checkpoint.commit.hash]);
   await git.run(["clean", "-fd", "--", `.ways/sdd/${state.id}`]);
   await restoreStateFromHead(cwd);
-  return certification.hash;
+  return checkpoint.commit.hash;
 }

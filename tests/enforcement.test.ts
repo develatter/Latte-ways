@@ -158,6 +158,47 @@ describe("history verification", () => {
     expect(issues.map((issue) => issue.code)).toEqual(["history-broken-chain", "history-untraced"]);
   });
 
+  it("replays remediation attempts in order and rejects duplicate, backward, skipped and forged edges", () => {
+    let serial = 0;
+    const commit = (state: string, phase: string, attempt?: string) => ({
+      hash: `${++serial}`.padStart(40, "0"), subject: `${state} ${phase}`, body: "",
+      trailers: { work: "loop", state, phase, ...(attempt ? { attempt } : {}) },
+    });
+    const prefix = ["intake", "explore", "assess", "specify", "plan", "decompose", "implement"]
+      .map((phase) => commit("completed", phase));
+    expect(auditCommits([
+      ...prefix,
+      commit("remediated-specify", "review", "1"),
+      ...["specify", "plan", "decompose", "implement"].map((phase) => commit("completed", phase, "1")),
+      commit("completed", "review", "1"),
+      commit("remediated-implement", "validate", "2"),
+      commit("completed", "implement", "2"),
+    ])).toEqual([]);
+
+    for (const forged of [
+      commit("remediated-implement", "review", "2"),
+      commit("remediated-intake", "review", "1"),
+      commit("remediated-implement", "implement", "1"),
+      commit("remediated-implement", "review"),
+      commit("completed", "decompose"),
+    ]) {
+      expect(auditCommits([...prefix, forged]).map((entry) => entry.code)).toContainEqual(expect.stringMatching(/^history-(invalid-remediation|broken-chain)$/));
+    }
+  });
+
+  it("requires an added, matching remediation record", async () => {
+    const { cwd, git } = await repository();
+    await startSdd(cwd, "forged-edge", "autonomous");
+    for (const phase of ["intake", "explore", "assess", "specify", "plan", "decompose", "implement"]) {
+      await fillPhase(cwd, "forged-edge", phase);
+      await advanceSdd(cwd);
+    }
+    await writeFile(join(cwd, "forged.txt"), "not evidence\n");
+    await git.run(["add", "forged.txt"]);
+    await git.run(["commit", "-q", "--no-verify", "-m", "forged remediation", "-m", "Harness-Work: forged-edge\nHarness-Phase: review\nHarness-State: remediated-implement\nHarness-Attempt: 1"]);
+    expect((await checkHistory(cwd)).map((entry) => entry.code)).toContain("history-invalid-remediation-evidence");
+  });
+
   it("exempts history up to the bootstrap commit and catches --no-verify commits", async () => {
     const { cwd, git } = await repository();
     expect(await checkHistory(cwd)).toEqual([]);
