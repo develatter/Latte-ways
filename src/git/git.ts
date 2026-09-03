@@ -8,6 +8,7 @@ export interface CommitTrailers {
   phase?: string;
   state?: string;
   task?: string;
+  attempt?: string;
 }
 
 export interface CommitInfo {
@@ -129,6 +130,7 @@ export function parseTrailers(body: string): CommitTrailers {
     "Harness-Phase": "phase",
     "Harness-State": "state",
     "Harness-Task": "task",
+    "Harness-Attempt": "attempt",
   };
 
   for (const line of body.split("\n")) {
@@ -147,6 +149,7 @@ export function formatTrailers(trailers: CommitTrailers): string {
     ["Harness-Phase", trailers.phase],
     ["Harness-State", trailers.state],
     ["Harness-Task", trailers.task],
+    ["Harness-Attempt", trailers.attempt],
   ];
   return entries.filter((entry): entry is [string, string] => Boolean(entry[1])).map(([key, value]) => `${key}: ${value}`).join("\n");
 }

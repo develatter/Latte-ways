@@ -38,8 +38,8 @@ describe("GitRepository", () => {
 });
 
 describe("trailers", () => {
-  it("round trips metadata", () => {
-    const text = formatTrailers({ work: "x", phase: "plan", state: "completed", task: "api" });
-    expect(parseTrailers(text)).toEqual({ work: "x", phase: "plan", state: "completed", task: "api" });
+  it("round trips metadata including remediation attempts", () => {
+    const text = formatTrailers({ work: "x", phase: "plan", state: "completed", task: "api", attempt: "1" });
+    expect(parseTrailers(text)).toEqual({ work: "x", phase: "plan", state: "completed", task: "api", attempt: "1" });
   });
 });

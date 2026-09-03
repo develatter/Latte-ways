@@ -22,6 +22,8 @@ export type ExecutionMode = "inline" | "delegated";
 export type TaskStatus = "pending" | "ready" | "active" | "review" | "completed" | "blocked";
 export type FindingSeverity = "critical" | "high" | "medium" | "low";
 export type FindingDisposition = "open" | "fixed" | "accepted" | "deferred";
+export type RemediationSource = "review" | "validate";
+export type RemediationTarget = "implement" | "decompose" | "plan" | "specify";
 
 export interface TaskState {
   id: string;
@@ -48,6 +50,9 @@ export interface WorkState {
   phase?: SddPhase;
   lastCompletedPhase?: SddPhase;
   planPath?: string;
+  /** Absent on v1 state files and therefore interpreted as attempt zero. */
+  attempt?: number;
+  remediation?: RemediationMetadata;
   tasks: TaskState[];
 }
 
@@ -81,6 +86,8 @@ export interface ReviewResult {
   digest: string;
   verdict: "pass" | "fail";
   findings: ReviewFinding[];
+  /** Absent on v1 review records and therefore interpreted as attempt zero. */
+  attempt?: number;
   taskId?: string;
 }
 
@@ -92,4 +99,40 @@ export interface ApprovalRecord {
   digest: string;
   approvedBy: string;
   approvedAt: string;
+  /** Absent on v1 approval records and therefore interpreted as attempt zero. */
+  attempt?: number;
+}
+
+export interface ReviewFailureEvidence {
+  kind: "review";
+  review: ReviewResult & { verdict: "fail" };
+}
+
+export interface ValidationCheckFailure {
+  check: string;
+  detail: string;
+}
+
+export interface ValidationFailureEvidence {
+  kind: "validate";
+  failures: ValidationCheckFailure[];
+}
+
+export type RemediationEvidence = ReviewFailureEvidence | ValidationFailureEvidence;
+
+/** The attempt-scoped state needed to reopen an SDD work without erasing its prior gate. */
+export interface RemediationMetadata {
+  source: RemediationSource;
+  target: RemediationTarget;
+  reason: string;
+  evidence: RemediationEvidence;
+  priorCheckpoint: string;
+  attempt: number;
+  timestamp: string;
+}
+
+/** Immutable transition record written when a remediation attempt is opened. */
+export interface RemediationRecord extends RemediationMetadata {
+  schemaVersion: 1;
+  workId: string;
 }

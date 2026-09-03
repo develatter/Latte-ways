@@ -19,9 +19,25 @@
     "phase": { "enum": ["intake", "explore", "assess", "specify", "plan", "decompose", "implement", "review", "validate", "reconcile-memory", "close"] },
     "lastCompletedPhase": { "$ref": "#/properties/phase" },
     "planPath": { "type": "string", "minLength": 1 },
+    "attempt": { "type": "integer", "minimum": 0, "maximum": 9007199254740991 },
+    "remediation": { "$ref": "https://latte-ways.dev/schemas/remediation-v1.json#/$defs/metadata" },
     "tasks": {
       "type": "array",
       "items": { "$ref": "https://latte-ways.dev/schemas/task-v1.json" }
     }
-  }
+  },
+  "allOf": [
+    {
+      "if": {
+        "properties": { "remediation": true },
+        "required": ["remediation"]
+      },
+      "then": {
+        "required": ["attempt"],
+        "properties": {
+          "attempt": { "const": { "$data": "1/remediation/attempt" } }
+        }
+      }
+    }
+  ]
 }
