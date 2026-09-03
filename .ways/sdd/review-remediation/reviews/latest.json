@@ -1,0 +1,33 @@
+{
+  "schemaVersion": 1,
+  "workId": "review-remediation",
+  "reviewer": "ways-reviewer",
+  "digest": "1c74752a638ce525f1750229b34b8eb5377645984b854e0828ee69c6ec778f98",
+  "verdict": "fail",
+  "findings": [
+    {
+      "id": "RR-001",
+      "severity": "critical",
+      "summary": "Delegated implementation permits dirty or staged production changes to be absorbed into the trusted certification commit without task provenance.",
+      "disposition": "open"
+    },
+    {
+      "id": "RR-002",
+      "severity": "critical",
+      "summary": "Prior attempt artifacts are mutable, and deleting then re-adding remediation.json can move the review baseline forward and omit remediation commits.",
+      "disposition": "open"
+    },
+    {
+      "id": "RR-003",
+      "severity": "high",
+      "summary": "Hook and history verification accept fabricated schema-valid review or validation failure evidence without proving the failed gate.",
+      "disposition": "open"
+    },
+    {
+      "id": "RR-004",
+      "severity": "high",
+      "summary": "Remediated human approval instructs the approver to inspect the attempt-zero phase path instead of the active attempt-scoped artifact.",
+      "disposition": "open"
+    }
+  ]
+}
