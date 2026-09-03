@@ -3,16 +3,18 @@ import { join } from "node:path";
 import { createInterface } from "node:readline/promises";
 import { userInfo } from "node:os";
 import { SDD_DIR } from "../domain/constants.js";
-import type { ApprovalRecord, WorkState } from "../domain/types.js";
+import { SDD_PHASES, type ApprovalRecord, type SddPhase, type WorkState } from "../domain/types.js";
 import { validateApproval } from "../domain/validation.js";
 import { stableJson, writeAtomic } from "../fs/files.js";
 import { GitRepository } from "../git/git.js";
 import { HUMAN_GATES } from "../state/status.js";
 import { loadState } from "../state/store.js";
+import { attemptApprovalPath, attemptNumber } from "./attempt.js";
 import { workDigest } from "./digest.js";
 
-export function approvalPath(workId: string, phase: string): string {
-  return `${SDD_DIR}/${workId}/approvals/${phase}.json`;
+export function approvalPath(workId: string, phase: string, attempt?: number): string {
+  if (!SDD_PHASES.includes(phase as SddPhase)) throw new Error("Approval phase must be an SDD phase");
+  return attemptApprovalPath(workId, attempt, phase as SddPhase);
 }
 
 export function requiresApproval(state: WorkState): boolean {
@@ -29,6 +31,7 @@ async function gateState(cwd: string): Promise<WorkState> {
 async function writeApproval(cwd: string, approvedBy: string): Promise<ApprovalRecord> {
   const state = await gateState(cwd);
   if (!approvedBy.trim()) throw new Error("Approver identity is required");
+  const attempt = attemptNumber(state.attempt);
   const record: ApprovalRecord = {
     schemaVersion: 1,
     workId: state.id,
@@ -37,8 +40,9 @@ async function writeApproval(cwd: string, approvedBy: string): Promise<ApprovalR
     digest: await workDigest(cwd, state.gateCommit),
     approvedBy: approvedBy.trim(),
     approvedAt: new Date().toISOString(),
+    ...(attempt === 0 ? {} : { attempt }),
   };
-  await writeAtomic(join(cwd, approvalPath(record.workId, record.phase)), stableJson(record));
+  await writeAtomic(join(cwd, approvalPath(record.workId, record.phase, record.attempt)), stableJson(record));
   return record;
 }
 
@@ -94,17 +98,18 @@ export async function approveInteractively(cwd: string, terminal: Terminal = pro
   return writeApproval(cwd, await approverIdentity(cwd));
 }
 
-export async function readApproval(cwd: string, workId: string, phase: string): Promise<ApprovalRecord | undefined> {
+export async function readApproval(cwd: string, workId: string, phase: string, attempt?: number): Promise<ApprovalRecord | undefined> {
   try {
-    const value: unknown = JSON.parse(await readFile(join(cwd, approvalPath(workId, phase)), "utf8"));
+    const value: unknown = JSON.parse(await readFile(join(cwd, approvalPath(workId, phase, attempt)), "utf8"));
     return validateApproval(value) ? value : undefined;
   } catch {
     return undefined;
   }
 }
 
-export function approvalBinds(record: ApprovalRecord, expected: { workId: string; phase: string; gateCommit: string; digest?: string }): string | undefined {
+export function approvalBinds(record: ApprovalRecord, expected: { workId: string; phase: string; gateCommit: string; digest?: string; attempt?: number | undefined }): string | undefined {
   if (record.workId !== expected.workId || record.phase !== expected.phase) return "approval belongs to another work or phase";
+  if (attemptNumber(record.attempt) !== attemptNumber(expected.attempt)) return "approval belongs to another remediation attempt";
   if (record.gateCommit !== expected.gateCommit) return "approval was given at another gate commit";
   if (expected.digest !== undefined && record.digest !== expected.digest) return "content changed after approval";
   return undefined;
@@ -113,9 +118,9 @@ export function approvalBinds(record: ApprovalRecord, expected: { workId: string
 /** Throws unless a valid approval bound to the current gate and content exists. */
 export async function assertApproved(cwd: string, state: WorkState): Promise<ApprovalRecord> {
   const phase = state.phase!;
-  const record = await readApproval(cwd, state.id, phase);
+  const record = await readApproval(cwd, state.id, phase, state.attempt);
   if (!record) throw new Error(`Phase ${phase} requires explicit human approval; the human runs \`ways approve\` in a terminal`);
-  const failure = approvalBinds(record, { workId: state.id, phase, gateCommit: state.gateCommit, digest: await workDigest(cwd, state.gateCommit) });
+  const failure = approvalBinds(record, { workId: state.id, phase, gateCommit: state.gateCommit, digest: await workDigest(cwd, state.gateCommit), attempt: state.attempt });
   if (failure) throw new Error(`Approval for ${phase} is not valid: ${failure}; the human must approve again`);
   return record;
 }
