@@ -1,5 +1,13 @@
 {
   "schemaVersion": 1,
-  "active": false,
-  "updatedAt": "2026-09-02T11:59:18.250Z"
+  "active": true,
+  "mode": "sdd",
+  "id": "review-remediation",
+  "status": "active",
+  "gateCommit": "51d3090cba27ba63193dd7769af1ff14d58139c0",
+  "updatedAt": "2026-09-03T06:36:41.629Z",
+  "phase": "explore",
+  "humanGate": false,
+  "profile": "autonomous",
+  "execution": "delegated"
 }

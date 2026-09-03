@@ -1,0 +1,16 @@
+{
+  "schemaVersion": 1,
+  "harnessVersion": "0.1.0",
+  "id": "review-remediation",
+  "mode": "sdd",
+  "status": "active",
+  "profile": "autonomous",
+  "execution": "delegated",
+  "phase": "explore",
+  "baseCommit": "51d3090cba27ba63193dd7769af1ff14d58139c0",
+  "gateCommit": "51d3090cba27ba63193dd7769af1ff14d58139c0",
+  "createdAt": "2026-09-03T06:33:45.142Z",
+  "updatedAt": "2026-09-03T06:36:41.629Z",
+  "tasks": [],
+  "lastCompletedPhase": "intake"
+}
