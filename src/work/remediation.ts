@@ -12,7 +12,7 @@ import { validateRemediation, validateReview } from "../domain/validation.js";
 import { stableJson, writeAtomic } from "../fs/files.js";
 import { GitRepository } from "../git/git.js";
 import { loadState, saveState } from "../state/store.js";
-import { attemptNumber, attemptReviewPath, remediationRecordPath } from "./attempt.js";
+import { attemptNumber, attemptPhasePath, attemptReviewPath, remediationRecordPath } from "./attempt.js";
 import { implementationDigest } from "./digest.js";
 import { assertSddConsistency, createSddPhaseFile } from "./sdd.js";
 
@@ -82,7 +82,8 @@ export async function remediateSdd(cwd: string, target: RemediationTarget, reaso
   await assertSddConsistency(cwd, state);
   const git = new GitRepository(cwd);
   const reviewPath = attemptReviewPath(state.id, state.attempt);
-  const allowed = state.phase === "review" ? new Set([reviewPath]) : new Set<string>();
+  const allowed = new Set([attemptPhasePath(state.id, state.attempt, state.phase)]);
+  if (state.phase === "review") allowed.add(reviewPath);
   const evidence = state.phase === "review"
     ? await failedReviewEvidence(cwd, state)
     : undefined;

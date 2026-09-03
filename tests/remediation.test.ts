@@ -45,6 +45,7 @@ async function reviewRepository(profile: "autonomous" | "supervised" = "autonomo
   await writeFile(join(cwd, ".ways/sdd/failing/review.md"), "# review\n\nGoal:\nEvidence:\nDecision:\nGate:\n");
   await saveState(cwd, state);
   await git.commit(await git.changedPaths(), "implement", { work: "failing", phase: "implement", state: "completed" });
+  await writeFile(join(cwd, ".ways/sdd/failing/review.md"), "# review\n\nGoal: inspect the implementation\nEvidence: blocking findings\nDecision: fail\nGate: remediate\n");
   const digest = await reviewDigest(cwd);
   const reviewPath = attemptReviewPath("failing", 0);
   await mkdir(join(cwd, reviewPath, ".."), { recursive: true });
@@ -58,7 +59,8 @@ async function validateRepository(testExit = 7): Promise<{ cwd: string; git: Git
   const { cwd, git, base } = await baseRepository(testExit);
   await mkdir(join(cwd, ".ways/sdd/failing"), { recursive: true });
   await writeFile(join(cwd, ".ways/sdd/failing/review.md"), "# review\n\nGoal: inspect\nEvidence: pass\n");
-  const reviewParent = await git.commit([".ways/sdd/failing/review.md"], "implement", { work: "failing", phase: "implement", state: "completed" });
+  await writeFile(join(cwd, "implementation.ts"), "export const value = 1;\n");
+  const reviewParent = await git.commit([".ways/sdd/failing/review.md", "implementation.ts"], "implement", { work: "failing", phase: "implement", state: "completed" });
   const now = new Date().toISOString();
   await writeFile(join(cwd, ".ways/sdd/failing/validate.md"), "# validate\n\nGoal:\nEvidence:\nDecision:\nGate:\n");
   await saveState(cwd, {
@@ -67,6 +69,7 @@ async function validateRepository(testExit = 7): Promise<{ cwd: string; git: Git
     gateCommit: reviewParent, createdAt: now, updatedAt: now, tasks: [],
   });
   await git.commit(await git.changedPaths(), "review", { work: "failing", phase: "review", state: "completed" });
+  await writeFile(join(cwd, ".ways/sdd/failing/validate.md"), "# validate\n\nGoal: run all checks\nEvidence: configured tests exited 7\nDecision: fail\nGate: remediate\n");
   return { cwd, git, prior: await git.head() };
 }
 
@@ -113,6 +116,25 @@ describe("SDD remediation transitions", { timeout: 120_000 }, () => {
     expect((await loadState(cwd))?.attempt).toBeUndefined();
   });
 
+  it.each(["review", "validate"] as const)("preserves a filled %s artifact and its failure evidence through remediation", async (source) => {
+    const fixture = source === "review" ? await reviewRepository() : await validateRepository();
+    const sourcePath = attemptPhasePath("failing", 0, source);
+    const sourceArtifact = await readFile(join(fixture.cwd, sourcePath), "utf8");
+
+    const hash = await remediateSdd(fixture.cwd, "implement", `address ${source} failure`);
+
+    expect(await readFile(join(fixture.cwd, sourcePath), "utf8")).toBe(sourceArtifact);
+    expect(await fixture.git.run(["show", `${hash}:${sourcePath}`])).toBe(sourceArtifact.trimEnd());
+    const record = JSON.parse(await readFile(join(fixture.cwd, remediationRecordPath("failing", 1)), "utf8"));
+    expect(record.evidence.kind).toBe(source);
+    if (source === "review") {
+      expect(record.evidence.review.verdict).toBe("fail");
+      expect(await fixture.git.run(["show", `${hash}:${fixture.reviewPath}`])).toContain('"verdict": "fail"');
+    } else {
+      expect(record.evidence.failures).toContainEqual(expect.objectContaining({ check: "configured-tests" }));
+    }
+  });
+
   it("rejects stale review evidence and unrelated staged or dirty content without mutation", async () => {
     const { cwd, git, prior } = await reviewRepository();
     await writeFile(join(cwd, "implementation.ts"), "export const value = 2;\n");
@@ -122,6 +144,20 @@ describe("SDD remediation transitions", { timeout: 120_000 }, () => {
     await writeFile(join(cwd, "unrelated.txt"), "no\n");
     await git.run(["add", "unrelated.txt"]);
     await expect(remediateSdd(cwd, "implement", "fix it")).rejects.toThrow();
+    expect(await git.head()).toBe(prior);
+    expect((await loadState(cwd))?.attempt).toBeUndefined();
+  });
+
+  it.each([
+    ["previously certified artifact", ".ways/sdd/failing/review.md", false],
+    ["staged production", "implementation.ts", true],
+    ["other dirty content", "unrelated.txt", false],
+  ] as const)("rejects %s while the active validate artifact is filled", async (_label, path, staged) => {
+    const { cwd, git, prior } = await validateRepository();
+    await writeFile(join(cwd, path), "unrelated mutation\n");
+    if (staged) await git.run(["add", path]);
+
+    await expect(remediateSdd(cwd, "implement", "fix validation")).rejects.toThrow(/Unrelated dirty or staged content/);
     expect(await git.head()).toBe(prior);
     expect((await loadState(cwd))?.attempt).toBeUndefined();
   });
