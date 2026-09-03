@@ -1,6 +1,6 @@
 # specify
 
-Goal:
-Evidence:
-Decision:
-Gate:
+Goal: Specify additive, auditable remediation loops for failed SDD review and validation gates.
+Evidence: Current forward-only state leaves failed `review`/`validate` active while delegated tasks can only mutate through `decompose`/`implement`; destructive repair loses history and edits outside implement can evade delegated integration.
+Decision: Add `ways sdd remediate <implement|decompose|plan|specify> --reason=<text>`, allowed only from review or validate. Review remediation requires a valid current failed review; validation remediation must rerun and capture failing checks. The command must reject unrelated dirty content, preserve all commits and certified artifacts, commit a typed attempt-scoped transition record, increment an attempt counter, select an attempt-scoped phase file, and expose remediation in status. Returning to implement must allow adding fresh uniquely named tasks; old completed tasks remain immutable. All paths then advance normally through a fresh review and validation. Supervised reopened human gates require new attempt-scoped approvals. Review and approval storage must be attempt-scoped while reading attempt zero remains backward-compatible. Delegated implementation enforcement must anchor at the remediation transition and accept only newly integrated task commits; guards must block main-worktree production edits in review and validate. Repair and history auditing must replay explicit remediation edges and reject untraced backward/duplicate certifications. Review digest must cover the complete implementation cycle rather than omit the last integrated commit. Managed adapters must be changed through canonical assets and regenerated.
+Gate: Acceptance requires tests for all review/validate target combinations; missing, passing or stale failure evidence; dirty-tree rejection; immutable prior artifacts; task reopening/addition and delegated commit enforcement; fresh digest/review; supervised approval rebinding; status; repair; hooks/history forgery rejection; and unchanged success for the linear lifecycle.
