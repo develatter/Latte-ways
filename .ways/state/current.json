@@ -6,11 +6,74 @@
   "status": "active",
   "profile": "autonomous",
   "execution": "delegated",
-  "phase": "decompose",
+  "phase": "implement",
   "baseCommit": "51d3090cba27ba63193dd7769af1ff14d58139c0",
-  "gateCommit": "6e7b4bdd5928a8c66b0c799e434c347a0bbd5a00",
+  "gateCommit": "230b6d4b358213c3c7c095c2f8a92ff9d0b5b4be",
   "createdAt": "2026-09-03T06:33:45.142Z",
-  "updatedAt": "2026-09-03T06:49:01.849Z",
-  "tasks": [],
-  "lastCompletedPhase": "plan"
+  "updatedAt": "2026-09-03T06:49:32.200Z",
+  "tasks": [
+    {
+      "id": "attempt-contracts",
+      "title": "Add backward-compatible attempt/remediation contracts, schemas, trailers, and centralized attempt-scoped artifact paths",
+      "status": "ready",
+      "dependsOn": [],
+      "commits": []
+    },
+    {
+      "id": "attempt-evidence",
+      "title": "Make review and approval evidence attempt-aware and bind review digest to the full implementation cycle",
+      "status": "pending",
+      "dependsOn": [
+        "attempt-contracts"
+      ],
+      "commits": []
+    },
+    {
+      "id": "attempt-tasks",
+      "title": "Make delegated tasks and implementation enforcement attempt-aware with fresh remediation tasks",
+      "status": "pending",
+      "dependsOn": [
+        "attempt-contracts"
+      ],
+      "commits": []
+    },
+    {
+      "id": "remediation-machine",
+      "title": "Implement evidence-gated additive sdd remediate transitions and attempt-aware forward phase lifecycle",
+      "status": "pending",
+      "dependsOn": [
+        "attempt-evidence",
+        "attempt-tasks"
+      ],
+      "commits": []
+    },
+    {
+      "id": "remediation-audit-repair",
+      "title": "Replay remediation transitions in consistency, history, hooks, integrity and repair with forgery rejection",
+      "status": "pending",
+      "dependsOn": [
+        "remediation-machine"
+      ],
+      "commits": []
+    },
+    {
+      "id": "remediation-surface-adapters",
+      "title": "Expose remediation through CLI and status, strengthen delegated guards, update canonical docs and regenerate adapters",
+      "status": "pending",
+      "dependsOn": [
+        "remediation-audit-repair"
+      ],
+      "commits": []
+    },
+    {
+      "id": "remediation-adversarial",
+      "title": "Add end-to-end adversarial remediation matrix and legacy lifecycle regression coverage",
+      "status": "pending",
+      "dependsOn": [
+        "remediation-surface-adapters"
+      ],
+      "commits": []
+    }
+  ],
+  "lastCompletedPhase": "decompose"
 }
