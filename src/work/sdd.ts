@@ -9,20 +9,21 @@ import { writeAtomic } from "../fs/files.js";
 import { GitRepository } from "../git/git.js";
 import { loadState, removeState, saveState } from "../state/store.js";
 import { approvalPath, assertApproved, requiresApproval } from "./approve.js";
+import { attemptNumber, attemptPhasePath, remediationRecordPath } from "./attempt.js";
 import { assertReviewPassed } from "./review.js";
 import { assertDelegatedImplementation } from "./tasks.js";
 
 function phasePath(state: WorkState, phase: SddPhase): string {
-  return `${SDD_DIR}/${state.id}/${phase}.md`;
+  return attemptPhasePath(state.id, state.attempt, phase);
 }
 
 function phaseTemplate(phase: SddPhase): string {
   return `# ${phase}\n\nGoal:\nEvidence:\nDecision:\nGate:\n`;
 }
 
-async function createPhaseFile(cwd: string, state: WorkState, phase: SddPhase): Promise<void> {
+export async function createSddPhaseFile(cwd: string, state: WorkState, phase: SddPhase): Promise<void> {
   const path = join(cwd, phasePath(state, phase));
-  await mkdir(join(cwd, SDD_DIR, state.id), { recursive: true });
+  await mkdir(join(path, ".."), { recursive: true });
   await writeAtomic(path, phaseTemplate(phase));
 }
 
@@ -48,13 +49,32 @@ export async function assertSddConsistency(cwd: string, state: WorkState): Promi
   const git = new GitRepository(cwd);
   const head = await git.head();
   await assertProfileCommitted(git, state);
+  const attempt = attemptNumber(state.attempt);
   if (!state.lastCompletedPhase) {
-    if (head !== state.baseCommit && !await isOpeningCommit(git, state, head)) throw new Error("SDD state diverged before its first gate; run ways repair");
+    if (attempt === 0) {
+      if (head !== state.baseCommit && !await isOpeningCommit(git, state, head)) throw new Error("SDD state diverged before its first gate; run ways repair");
+      return;
+    }
+    const remediation = state.remediation;
+    if (!remediation || remediation.attempt !== attempt || state.phase !== remediation.target) {
+      throw new Error("Remediation state does not identify its reopened phase; run ways repair");
+    }
+    const recordPath = remediationRecordPath(state.id, attempt);
+    const transitionHash = await git.run(["log", "--diff-filter=A", "-1", "--format=%H", "--", recordPath]);
+    if (!transitionHash || !await git.isAncestor(transitionHash, head)) throw new Error("Remediation transition is not committed at HEAD; run ways repair");
+    const transition = await git.commitInfo(transitionHash);
+    if (transition.trailers.work !== state.id || transition.trailers.phase !== remediation.source
+      || transition.trailers.state !== `remediated-${remediation.target}` || transition.trailers.attempt !== String(attempt)
+      || await git.parent(transitionHash) !== remediation.priorCheckpoint || state.gateCommit !== remediation.priorCheckpoint) {
+      throw new Error("Remediation transition does not match active state; run ways repair");
+    }
     return;
   }
-  const commit = await git.findCertification(state.id, state.lastCompletedPhase);
+  const commit = (await git.recentCommits()).find((candidate) => candidate.trailers.work === state.id
+    && candidate.trailers.phase === state.lastCompletedPhase && candidate.trailers.state === "completed"
+    && (attempt === 0 ? candidate.trailers.attempt === undefined : candidate.trailers.attempt === String(attempt)));
   if (!commit || !await git.isAncestor(commit.hash, head)) {
-    throw new Error("HEAD does not contain certification for the previous SDD phase; run ways repair");
+    throw new Error("HEAD does not contain certification for the previous SDD phase in the current attempt; run ways repair");
   }
   if (await git.parent(commit.hash) !== state.gateCommit) throw new Error("State gate commit does not match certification parent; run ways repair");
 }
@@ -105,7 +125,7 @@ export async function startSdd(cwd: string, id: string, profile: ApprovalProfile
     updatedAt: now,
     tasks: [],
   };
-  await createPhaseFile(cwd, state, "intake");
+  await createSddPhaseFile(cwd, state, "intake");
   await saveState(cwd, state);
   if (profile === "supervised") await openSupervised(cwd, state);
   return state;
@@ -136,7 +156,9 @@ export async function advanceSdd(cwd: string): Promise<string> {
   if (!next) {
     if (requiresApproval(state)) {
       // The closing commit removes the SDD folder, so the close approval is committed first and its deletion is what the hook verifies.
-      await git.commit([approvalPath(state.id, "close")], `sdd(close): record approval of ${state.id}`, { work: state.id, phase: "close", state: "approved" });
+      await git.commit([approvalPath(state.id, "close", state.attempt)], `sdd(close): record approval of ${state.id}`, {
+        work: state.id, phase: "close", state: "approved", ...(attemptNumber(state.attempt) > 0 ? { attempt: String(state.attempt) } : {}),
+      });
     }
     for (const task of state.tasks) {
       if (task.worktree) {
@@ -162,7 +184,7 @@ export async function advanceSdd(cwd: string): Promise<string> {
     state.phase = next;
     state.gateCommit = previousHead;
     state.updatedAt = new Date().toISOString();
-    await createPhaseFile(cwd, state, next);
+    await createSddPhaseFile(cwd, state, next);
     await saveState(cwd, state);
   }
 
@@ -171,6 +193,7 @@ export async function advanceSdd(cwd: string): Promise<string> {
     work: state.id,
     phase: completed,
     state: "completed",
+    ...(attemptNumber(state.attempt) > 0 ? { attempt: String(state.attempt) } : {}),
   });
 }
 

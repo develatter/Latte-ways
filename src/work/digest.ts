@@ -11,7 +11,7 @@ const BOOKKEEPING = [STATUS_PATH, `${STATE_PATH}`];
 
 function isBookkeeping(path: string): boolean {
   if (BOOKKEEPING.includes(path)) return true;
-  return new RegExp(`^${SDD_DIR}/[^/]+/(approvals|reviews)/`).test(path);
+  return new RegExp(`^${SDD_DIR}/[^/]+/(?:attempts/[0-9]+/)?(approvals|reviews)/`).test(path);
 }
 
 /**
@@ -21,7 +21,14 @@ function isBookkeeping(path: string): boolean {
  */
 export async function workDigest(cwd: string, since: string): Promise<string> {
   const git = new GitRepository(cwd);
-  const exclude = [`:(exclude)${STATUS_PATH}`, `:(exclude)${STATE_PATH}`, `:(exclude,glob)${SDD_DIR}/*/approvals/**`, `:(exclude,glob)${SDD_DIR}/*/reviews/**`];
+  const exclude = [
+    `:(exclude)${STATUS_PATH}`,
+    `:(exclude)${STATE_PATH}`,
+    `:(exclude,glob)${SDD_DIR}/*/approvals/**`,
+    `:(exclude,glob)${SDD_DIR}/*/reviews/**`,
+    `:(exclude,glob)${SDD_DIR}/*/attempts/*/approvals/**`,
+    `:(exclude,glob)${SDD_DIR}/*/attempts/*/reviews/**`,
+  ];
   const hash = createHash("sha256");
   hash.update(await git.run(["diff", "--binary", "--no-color", "--no-ext-diff", since, "--", ".", ...exclude]));
   const untracked = (await git.run(["ls-files", "--others", "--exclude-standard"])).split("\n").filter((path) => path && !isBookkeeping(path)).sort();
