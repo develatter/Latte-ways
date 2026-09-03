@@ -2,14 +2,13 @@ import { readFile } from "node:fs/promises";
 import { join } from "node:path";
 import { createInterface } from "node:readline/promises";
 import { userInfo } from "node:os";
-import { SDD_DIR } from "../domain/constants.js";
 import { SDD_PHASES, type ApprovalRecord, type SddPhase, type WorkState } from "../domain/types.js";
 import { validateApproval } from "../domain/validation.js";
 import { stableJson, writeAtomic } from "../fs/files.js";
 import { GitRepository } from "../git/git.js";
 import { HUMAN_GATES } from "../state/status.js";
 import { loadState } from "../state/store.js";
-import { attemptApprovalPath, attemptNumber } from "./attempt.js";
+import { attemptApprovalPath, attemptNumber, attemptPhasePath } from "./attempt.js";
 import { workDigest } from "./digest.js";
 
 export function approvalPath(workId: string, phase: string, attempt?: number): string {
@@ -92,7 +91,7 @@ export async function approveInteractively(cwd: string, terminal: Terminal = pro
   const state = await gateState(cwd);
   const digest = await workDigest(cwd, state.gateCommit);
   terminal.say(`Work ${state.id}, phase ${state.phase}, gate ${state.gateCommit.slice(0, 12)}, digest ${digest.slice(0, 12)}`);
-  terminal.say(`Read ${SDD_DIR}/${state.id}/${state.phase}.md and the diff since the gate before approving.`);
+  terminal.say(`Read ${attemptPhasePath(state.id, state.attempt, state.phase!)} and the diff since the gate before approving.`);
   const answer = await terminal.ask(`Type "${state.phase}" to approve: `);
   if (answer.trim() !== state.phase) throw new Error("Approval cancelled");
   return writeApproval(cwd, await approverIdentity(cwd));

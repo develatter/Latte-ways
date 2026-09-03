@@ -9,8 +9,9 @@ import { GitRepository } from "../src/git/git.js";
 import { judgeCommitMessage } from "../src/hooks/hook.js";
 import { auditCommits, checkHistory } from "../src/integrity/history.js";
 import { promotePlan, proposePlan, startPlan } from "../src/work/plan.js";
-import { loadState } from "../src/state/store.js";
-import { approveInteractively, approvalPath, type Terminal } from "../src/work/approve.js";
+import { loadState, saveState } from "../src/state/store.js";
+import { approveInteractively, approvalPath, assertApproved, type Terminal } from "../src/work/approve.js";
+import { attemptPhasePath } from "../src/work/attempt.js";
 import { reviewDigest, submitReview } from "../src/work/review.js";
 import { advanceSdd, startSdd } from "../src/work/sdd.js";
 
@@ -43,6 +44,35 @@ async function approve(cwd: string, phase: string): Promise<void> {
   await approveInteractively(cwd, terminal(true, phase));
 }
 
+async function setRemediatedGate(cwd: string, phase: "plan" | "close"): Promise<void> {
+  const state = (await loadState(cwd))!;
+  state.phase = phase;
+  state.attempt = 1;
+  state.remediation = {
+    source: "review",
+    target: "plan",
+    reason: "Address review finding",
+    evidence: {
+      kind: "review",
+      review: {
+        schemaVersion: 1,
+        workId: state.id,
+        reviewer: "ways-reviewer",
+        digest: "0".repeat(64),
+        verdict: "fail",
+        findings: [],
+      },
+    },
+    priorCheckpoint: state.gateCommit,
+    attempt: 1,
+    timestamp: "2026-01-01T00:00:00Z",
+  };
+  const path = join(cwd, attemptPhasePath(state.id, state.attempt, phase));
+  await mkdir(join(path, ".."), { recursive: true });
+  await writeFile(path, `# ${phase}\n\nGoal: current attempt\nEvidence: review remediation\n`);
+  await saveState(cwd, state);
+}
+
 describe("human approvals", () => {
   it("blocks a supervised gate until a human approves in a terminal", async () => {
     const { cwd } = await repository();
@@ -51,7 +81,13 @@ describe("human approvals", () => {
     await expect(advanceSdd(cwd)).rejects.toThrow(/requires explicit human approval/);
     await expect(approveInteractively(cwd, terminal(false, "intake"))).rejects.toThrow(/interactive terminal/);
     await expect(approveInteractively(cwd, terminal(true, "yes"))).rejects.toThrow(/cancelled/);
-    const record = await approveInteractively(cwd, terminal(true, "intake"));
+    const lines: string[] = [];
+    const record = await approveInteractively(cwd, {
+      interactive: true,
+      ask: async () => "intake",
+      say: (line) => lines.push(line),
+    });
+    expect(lines).toContain("Read .ways/sdd/sup/intake.md and the diff since the gate before approving.");
     expect(record).toMatchObject({ workId: "sup", phase: "intake", approvedBy: "Ways Test <ways@example.test>" });
     const gate = await advanceSdd(cwd);
     const git = new GitRepository(cwd);
@@ -86,6 +122,29 @@ describe("human approvals", () => {
     await writeFile(join(cwd, approvalPath("sup", "plan")), JSON.stringify({ ...stale, phase: "plan" }));
     await fill(cwd, "sup", "plan");
     await expect(advanceSdd(cwd)).rejects.toThrow(/another gate commit/);
+  });
+
+  it("shows active remediated plan and close artifacts and rejects stale approvals", async () => {
+    const { cwd } = await repository();
+    await startSdd(cwd, "sup", "supervised");
+
+    for (const phase of ["plan", "close"] as const) {
+      await setRemediatedGate(cwd, phase);
+      const lines: string[] = [];
+      const record = await approveInteractively(cwd, {
+        interactive: true,
+        ask: async () => phase,
+        say: (line) => lines.push(line),
+      });
+      const artifact = attemptPhasePath("sup", 1, phase);
+      expect(lines).toContain(`Read ${artifact} and the diff since the gate before approving.`);
+      expect(record).toMatchObject({ phase, attempt: 1 });
+      expect(await readFile(join(cwd, approvalPath("sup", phase, 1)), "utf8")).toContain('"attempt": 1');
+    }
+
+    const activeCloseApproval = JSON.parse(await readFile(join(cwd, approvalPath("sup", "close", 1)), "utf8"));
+    await writeFile(join(cwd, approvalPath("sup", "close", 1)), JSON.stringify({ ...activeCloseApproval, attempt: 0 }));
+    await expect(assertApproved(cwd, (await loadState(cwd))!)).rejects.toThrow(/another remediation attempt/);
   });
 
   it("runs a supervised work end to end through the hook, approving intake, plan and close", async () => {
