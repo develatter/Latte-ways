@@ -1,6 +1,6 @@
 # plan
 
-Goal:
-Evidence:
-Decision:
-Gate:
+Goal: Deliver explicit remediation cycles without weakening existing linear SDD guarantees.
+Evidence: Certified specification and exploration identify required changes across contracts, attempt-aware evidence, state transitions, delegated tasks, audit/repair, CLI/status/adapters and adversarial coverage.
+Decision: 1) Introduce backward-compatible attempt/remediation contracts and centralized attempt paths. 2) Bind reviews and approvals to attempts and correct the implementation review baseline. 3) Make remediation tasks and delegated enforcement attempt-aware. 4) Implement `sdd remediate` with failed-review or failed-validation evidence and additive transition commits. 5) Replay remediation in consistency, history, hook and repair. 6) Expose CLI/status and regenerate adapters from canonical sources. 7) Add exhaustive lifecycle, forgery and regression tests. Use Sol medium for state-machine/integrity tasks, Terra high for bounded contracts/surfaces/tests, and Luna for exploration.
+Gate: Plan passes when every mutation is delegated with exclusive ownership, risky mechanics precede surfaces, all eight backward edges and legacy linear behavior have adversarial coverage, and review plus QA remain independent.
