@@ -6,74 +6,104 @@
   "status": "active",
   "profile": "autonomous",
   "execution": "delegated",
-  "phase": "implement",
+  "phase": "review",
   "baseCommit": "51d3090cba27ba63193dd7769af1ff14d58139c0",
-  "gateCommit": "230b6d4b358213c3c7c095c2f8a92ff9d0b5b4be",
+  "gateCommit": "bd5153749ae6d81961ca6aa7c67232fc0fa3fb5c",
   "createdAt": "2026-09-03T06:33:45.142Z",
-  "updatedAt": "2026-09-03T06:49:32.200Z",
+  "updatedAt": "2026-09-03T12:04:35.971Z",
   "tasks": [
     {
       "id": "attempt-contracts",
       "title": "Add backward-compatible attempt/remediation contracts, schemas, trailers, and centralized attempt-scoped artifact paths",
-      "status": "ready",
+      "status": "completed",
       "dependsOn": [],
-      "commits": []
+      "commits": [
+        "601424f7be2e46997a20494bc418805199a3770f"
+      ],
+      "branch": "ways/review-remediation/attempt-contracts",
+      "worktree": "/Users/alejandro.lopez/projects/Latte-ways/.ways/worktrees/review-remediation/attempt-contracts"
     },
     {
       "id": "attempt-evidence",
       "title": "Make review and approval evidence attempt-aware and bind review digest to the full implementation cycle",
-      "status": "pending",
+      "status": "completed",
       "dependsOn": [
         "attempt-contracts"
       ],
-      "commits": []
+      "commits": [
+        "05611bbb4a9daf80fb13e67ca94a44aa24643062"
+      ],
+      "branch": "ways/review-remediation/attempt-evidence",
+      "worktree": "/Users/alejandro.lopez/projects/Latte-ways/.ways/worktrees/review-remediation/attempt-evidence"
     },
     {
       "id": "attempt-tasks",
       "title": "Make delegated tasks and implementation enforcement attempt-aware with fresh remediation tasks",
-      "status": "pending",
+      "status": "completed",
       "dependsOn": [
         "attempt-contracts"
       ],
-      "commits": []
+      "commits": [
+        "e1f4327115c335db83cab8082e6e987a530344cd"
+      ],
+      "branch": "ways/review-remediation/attempt-tasks",
+      "worktree": "/Users/alejandro.lopez/projects/Latte-ways/.ways/worktrees/review-remediation/attempt-tasks"
     },
     {
       "id": "remediation-machine",
       "title": "Implement evidence-gated additive sdd remediate transitions and attempt-aware forward phase lifecycle",
-      "status": "pending",
+      "status": "completed",
       "dependsOn": [
         "attempt-evidence",
         "attempt-tasks"
       ],
-      "commits": []
+      "commits": [
+        "ed7d277d8eb558dc3d9754311275196fd7ab2007",
+        "900af440d9dab0a2666dcc7a2178ad023e2d79d9"
+      ],
+      "branch": "ways/review-remediation/remediation-machine",
+      "worktree": "/Users/alejandro.lopez/projects/Latte-ways/.ways/worktrees/review-remediation/remediation-machine"
     },
     {
       "id": "remediation-audit-repair",
       "title": "Replay remediation transitions in consistency, history, hooks, integrity and repair with forgery rejection",
-      "status": "pending",
+      "status": "completed",
       "dependsOn": [
         "remediation-machine"
       ],
-      "commits": []
+      "commits": [
+        "1b2cc05e4b6b21c9e0f033b4a4d0ffc5028e1f50"
+      ],
+      "branch": "ways/review-remediation/attempt-0/remediation-audit-repair",
+      "worktree": "/Users/alejandro.lopez/projects/Latte-ways/.ways/worktrees/review-remediation/attempt-0/remediation-audit-repair"
     },
     {
       "id": "remediation-surface-adapters",
       "title": "Expose remediation through CLI and status, strengthen delegated guards, update canonical docs and regenerate adapters",
-      "status": "pending",
+      "status": "completed",
       "dependsOn": [
         "remediation-audit-repair"
       ],
-      "commits": []
+      "commits": [
+        "d10deca823229023d9978a83b601c11a2b530cf2"
+      ],
+      "branch": "ways/review-remediation/attempt-0/remediation-surface-adapters",
+      "worktree": "/Users/alejandro.lopez/projects/Latte-ways/.ways/worktrees/review-remediation/attempt-0/remediation-surface-adapters"
     },
     {
       "id": "remediation-adversarial",
       "title": "Add end-to-end adversarial remediation matrix and legacy lifecycle regression coverage",
-      "status": "pending",
+      "status": "completed",
       "dependsOn": [
         "remediation-surface-adapters"
       ],
-      "commits": []
+      "commits": [
+        "9ced15c7aa3737e964faca7252d9d26bd792d443",
+        "bd5153749ae6d81961ca6aa7c67232fc0fa3fb5c"
+      ],
+      "branch": "ways/review-remediation/attempt-0/remediation-adversarial",
+      "worktree": "/Users/alejandro.lopez/projects/Latte-ways/.ways/worktrees/review-remediation/attempt-0/remediation-adversarial"
     }
   ],
-  "lastCompletedPhase": "decompose"
+  "lastCompletedPhase": "implement"
 }
