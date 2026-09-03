@@ -1,7 +1,11 @@
 import { readFile } from "node:fs/promises";
 import { join } from "node:path";
+import { effectiveMemoryConfig, loadConfig } from "../config/config.js";
 import { KNOWLEDGE_DIR } from "../domain/constants.js";
 import { loadIndexes, type KnowledgeIndexes } from "../knowledge/indexes.js";
+import { inspectMemoryFreshness } from "../memory/freshness.js";
+import type { MemoryState } from "../memory/model.js";
+import { DISCOVERY_PATH, MEMORY_STATE_PATH } from "../memory/workflow.js";
 
 export type QueryLabel = "draft" | "unverified" | "roadmap" | "debt";
 
@@ -47,9 +51,26 @@ async function preview(cwd: string, path: string): Promise<string> {
   return content.replace(/^---[\s\S]*?---\s*/u, "").replace(/\s+/g, " ").trim().slice(0, 180);
 }
 
+async function defaultFreshnessWarnings(cwd: string): Promise<string[]> {
+  try {
+    const state = JSON.parse(await readFile(join(cwd, MEMORY_STATE_PATH), "utf8")) as MemoryState;
+    const config = effectiveMemoryConfig(await loadConfig(cwd));
+    return (await inspectMemoryFreshness(cwd, config, state)).warnings;
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code !== "ENOENT") throw error;
+    try {
+      await readFile(join(cwd, DISCOVERY_PATH), "utf8");
+      return ["Memory baseline is incomplete: reviewed discovery and coverage are still required."];
+    } catch (discoveryError) {
+      if ((discoveryError as NodeJS.ErrnoException).code === "ENOENT") return [];
+      throw discoveryError;
+    }
+  }
+}
+
 export async function queryKnowledgeResult(cwd: string, query: string, options: QueryOptions = {}): Promise<QueryResult> {
   const terms = queryTerms(query);
-  const warnings = options.freshness ? await options.freshness(cwd) : [];
+  const warnings = await (options.freshness ?? defaultFreshnessWarnings)(cwd);
   if (terms.length === 0) return { hits: [], warnings };
 
   const indexes = await loadIndexes(cwd);

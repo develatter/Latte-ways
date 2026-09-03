@@ -1,0 +1,1 @@
+{"schemaVersion":1,"id":"src-bootstrap-upgrade","globs":["src/bootstrap/**","src/upgrade/**"],"classification":"concept-backed","concepts":["components/bootstrap-upgrade"]}

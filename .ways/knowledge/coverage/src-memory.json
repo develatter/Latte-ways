@@ -1,0 +1,1 @@
+{"schemaVersion":1,"id":"src-memory","globs":["src/memory/**","src/knowledge/**","src/query/**"],"classification":"concept-backed","concepts":["components/living-memory","features/portable-workflows"]}

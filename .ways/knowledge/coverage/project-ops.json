@@ -1,0 +1,1 @@
+{"schemaVersion":1,"id":"project-ops","globs":["docs/**","scripts/**",".github/**","AGENTS.md","CLAUDE.md","MAP.md","README.md","package.json","package-lock.json","tsconfig.json","vitest.config.ts",".gitignore"],"classification":"concept-backed","concepts":["system/architecture","features/portable-workflows","conventions/mechanical-enforcement","conventions/provider-adapters"]}

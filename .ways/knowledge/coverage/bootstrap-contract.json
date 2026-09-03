@@ -1,0 +1,1 @@
+{"schemaVersion":1,"id":"bootstrap-contract","globs":["assets/bootstrap/**","assets/schemas/**"],"classification":"concept-backed","concepts":["components/bootstrap-upgrade"]}

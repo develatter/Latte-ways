@@ -1,0 +1,1 @@
+{"schemaVersion":1,"id":"provider-adapters","globs":["assets/adapters/**",".agents/**",".claude/**",".codex/**",".cursor/**",".pi/**"],"classification":"concept-backed","concepts":["conventions/provider-adapters","features/portable-workflows"]}

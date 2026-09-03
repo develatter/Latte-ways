@@ -152,8 +152,9 @@ The implementation lives in `src/`, bootstrap resources in `assets/`, and integr
 
 ## Current test baseline
 
-- Contract, Git, bootstrap, integrity, mode, SDD, repair, upgrade, OKF, indexing, review, and worktree integration coverage
+- Contract, Git, bootstrap, integrity, mode, SDD, repair, upgrade, OKF, indexing, review, worktree, and baseline end-to-end coverage
 - End-to-end SDD lifecycle test
+- Packed-consumer bootstrap and canonical check coverage
 - GitHub Actions using the same `scripts/check.sh` entrypoint
 
 ## License

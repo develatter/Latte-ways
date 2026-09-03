@@ -1,0 +1,1 @@
+{"schemaVersion":1,"id":"src-workflow","globs":["src/work/**","src/state/**","src/cli.ts","src/config/**","src/domain/**","src/fs/**","src/index.ts","src/repair/**"],"classification":"concept-backed","concepts":["components/workflow-engine","features/portable-workflows","system/architecture"]}

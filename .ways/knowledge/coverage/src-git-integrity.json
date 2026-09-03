@@ -1,0 +1,1 @@
+{"schemaVersion":1,"id":"src-git-integrity","globs":["src/git/**","src/integrity/**","src/hooks/**","src/check/**"],"classification":"concept-backed","concepts":["components/git-integrity","conventions/mechanical-enforcement"]}
