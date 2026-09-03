@@ -28,6 +28,8 @@ export type RemediationTarget = "implement" | "decompose" | "plan" | "specify";
 export interface TaskState {
   id: string;
   title: string;
+  /** Absent on v1 task records and therefore interpreted as attempt zero. */
+  attempt?: number;
   status: TaskStatus;
   dependsOn: string[];
   commits: string[];

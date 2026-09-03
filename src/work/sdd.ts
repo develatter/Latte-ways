@@ -7,10 +7,10 @@ import { SDD_PHASES, type ApprovalProfile, type ExecutionMode, type SddPhase, ty
 import { validateState } from "../domain/validation.js";
 import { writeAtomic } from "../fs/files.js";
 import { GitRepository } from "../git/git.js";
-import { commitsAfter } from "../integrity/history.js";
 import { loadState, removeState, saveState } from "../state/store.js";
 import { approvalPath, assertApproved, requiresApproval } from "./approve.js";
 import { assertReviewPassed } from "./review.js";
+import { assertDelegatedImplementation } from "./tasks.js";
 
 function phasePath(state: WorkState, phase: SddPhase): string {
   return `${SDD_DIR}/${state.id}/${phase}.md`;
@@ -57,21 +57,6 @@ export async function assertSddConsistency(cwd: string, state: WorkState): Promi
     throw new Error("HEAD does not contain certification for the previous SDD phase; run ways repair");
   }
   if (await git.parent(commit.hash) !== state.gateCommit) throw new Error("State gate commit does not match certification parent; run ways repair");
-}
-
-/**
- * In delegated execution every implementation commit must be one recorded by
- * `task integrate`; trailers alone prove nothing because anyone can write them.
- */
-async function assertDelegatedImplementation(cwd: string, state: WorkState): Promise<void> {
-  if (state.tasks.length === 0) throw new Error("Delegated execution requires at least one task; declare tasks during decompose");
-  const integrated = new Set(state.tasks.flatMap((task) => task.commits));
-  const git = new GitRepository(cwd);
-  for (const commit of await commitsAfter(git, state.gateCommit)) {
-    const certification = commit.trailers.work === state.id && commit.trailers.state === "completed" && commit.trailers.phase === state.lastCompletedPhase;
-    if (certification || integrated.has(commit.hash)) continue;
-    throw new Error(`Commit ${commit.hash.slice(0, 12)} "${commit.subject}" was not integrated from a task; the orchestrator must not implement in delegated execution`);
-  }
 }
 
 export async function committedState(git: GitRepository): Promise<WorkState | undefined> {
