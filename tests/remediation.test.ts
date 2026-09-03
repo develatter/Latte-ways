@@ -117,10 +117,11 @@ describe("SDD remediation transitions", { timeout: 120_000 }, () => {
     expect((await loadState(cwd))?.attempt).toBeUndefined();
   });
 
-  it.each(["review", "validate"] as const)("preserves a filled %s artifact and its failure evidence through remediation", async (source) => {
+  it.each(["review", "validate"] as const)("allows a genuine filled active %s source artifact and preserves its failure evidence", async (source) => {
     const fixture = source === "review" ? await reviewRepository() : await validateRepository();
     const sourcePath = attemptPhasePath("failing", 0, source);
     const sourceArtifact = await readFile(join(fixture.cwd, sourcePath), "utf8");
+    expect(sourceArtifact).toMatch(/Goal: .+\nEvidence: .+\nDecision: fail\nGate: remediate/);
 
     const hash = await remediateSdd(fixture.cwd, "implement", `address ${source} failure`);
 
@@ -169,7 +170,7 @@ describe("SDD remediation transitions", { timeout: 120_000 }, () => {
     ["previously certified artifact", ".ways/sdd/failing/review.md", false],
     ["staged production", "implementation.ts", true],
     ["other dirty content", "unrelated.txt", false],
-  ] as const)("rejects %s while the active validate artifact is filled", async (_label, path, staged) => {
+  ] as const)("rejects %s even while the genuine active validate source artifact is filled", async (_label, path, staged) => {
     const { cwd, git, prior } = await validateRepository();
     await writeFile(join(cwd, path), "unrelated mutation\n");
     if (staged) await git.run(["add", path]);
