@@ -1,11 +1,12 @@
 import { mkdir } from "node:fs/promises";
 import { join, resolve } from "node:path";
+import { STATE_PATH, STATUS_PATH } from "../domain/constants.js";
 import { SDD_PHASES, type SddPhase, type TaskState, type WorkState } from "../domain/types.js";
 import { stableJson, writeAtomic } from "../fs/files.js";
 import { GitRepository } from "../git/git.js";
 import { commitsAfter } from "../integrity/history.js";
 import { loadState, saveState } from "../state/store.js";
-import { attemptNumber } from "./attempt.js";
+import { attemptNumber, attemptPhasePath } from "./attempt.js";
 
 function requireSdd(state: WorkState | undefined): WorkState {
   if (!state || state.mode !== "sdd") throw new Error("No active SDD work");
@@ -137,7 +138,29 @@ async function remediationTransitionAnchor(git: GitRepository, state: WorkState)
   return transition.hash;
 }
 
-/** Enforce provenance from the current implementation cycle, not merely forgeable trailers. */
+export async function assertDelegatedCertificationTree(cwd: string, state: WorkState): Promise<void> {
+  const git = new GitRepository(cwd);
+  const allowed = new Set([
+    STATE_PATH,
+    STATUS_PATH,
+    attemptPhasePath(state.id, state.attempt, "implement"),
+  ]);
+  const commands = [
+    ["diff", "--name-only"],
+    ["diff", "--cached", "--name-only"],
+    ["ls-files", "--others", "--exclude-standard"],
+  ] as const;
+  const changed = new Set<string>();
+  for (const command of commands) {
+    for (const path of (await git.run(command)).split("\n")) if (path) changed.add(path);
+  }
+  const unrelated = [...changed].filter((path) => !allowed.has(path)).sort();
+  if (unrelated.length > 0) {
+    throw new Error(`Dirty or staged content outside delegated implementation orchestration blocks certification: ${unrelated.join(", ")}`);
+  }
+}
+
+/** Enforce provenance from the current implementation cycle, not merely forgeable trailers or index contents. */
 export async function assertDelegatedImplementation(cwd: string, state: WorkState): Promise<void> {
   const attempt = attemptNumber(state.attempt);
   const currentTasks = state.tasks.filter((task) => taskAttempt(task) === attempt);

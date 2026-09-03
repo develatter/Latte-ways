@@ -11,7 +11,7 @@ import { loadState, removeState, saveState } from "../state/store.js";
 import { approvalPath, assertApproved, requiresApproval } from "./approve.js";
 import { attemptNumber, attemptPhasePath, remediationRecordPath } from "./attempt.js";
 import { assertReviewPassed } from "./review.js";
-import { assertDelegatedImplementation } from "./tasks.js";
+import { assertDelegatedCertificationTree, assertDelegatedImplementation } from "./tasks.js";
 
 function phasePath(state: WorkState, phase: SddPhase): string {
   return attemptPhasePath(state.id, state.attempt, phase);
@@ -135,6 +135,10 @@ export async function advanceSdd(cwd: string): Promise<string> {
   const state = await loadState(cwd);
   if (!state || state.mode !== "sdd" || !state.phase) throw new Error("No active SDD work");
   await assertSddConsistency(cwd, state);
+  if (state.phase === "implement" && state.execution === "delegated") {
+    // Check both the index and worktree before creating the next phase or rewriting state.
+    await assertDelegatedCertificationTree(cwd, state);
+  }
   await assertPhaseFilled(cwd, state);
   if (requiresApproval(state)) await assertApproved(cwd, state);
   if (state.phase === "implement" && state.tasks.some((task) => task.status !== "completed")) {

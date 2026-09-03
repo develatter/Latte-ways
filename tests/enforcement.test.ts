@@ -291,6 +291,24 @@ describe("delegated execution", () => {
     await expect(advanceSdd(cwd)).rejects.toThrow(/"feat: forged" was not integrated from a task/);
   });
 
+  it.each([
+    ["staged production", "api.ts", true],
+    ["unstaged unrelated", "unrelated.txt", false],
+  ] as const)("does not absorb %s changes into delegated certification", async (_label, path, staged) => {
+    const { cwd, git } = await repository();
+    await delegatedAtImplement(cwd);
+    await integrateWorker(cwd);
+    const integratedHead = await git.head();
+    await writeFile(join(cwd, path), "// injected outside the task worktree\n");
+    if (staged) await git.run(["add", "--", path]);
+
+    await expect(advanceSdd(cwd)).rejects.toThrow(/Dirty or staged content outside delegated implementation orchestration/);
+
+    expect(await git.head()).toBe(integratedHead);
+    expect((await loadState(cwd))?.phase).toBe("implement");
+    await expect(readFile(join(cwd, ".ways/sdd/deleg/review.md"), "utf8")).rejects.toThrow();
+  });
+
   it("clears execution when downgrading", async () => {
     const { cwd } = await repository();
     await startSdd(cwd, "deleg", "autonomous", "delegated");

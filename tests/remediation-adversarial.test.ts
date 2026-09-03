@@ -137,6 +137,15 @@ describe("adversarial remediation lifecycle", { timeout: 120_000 }, () => {
     expect(remediationCommit).toMatch(/^[0-9a-f]{40}$/);
     await fillCurrentPhase(cwd, id);
 
+    const integratedHead = await git.head();
+    await writeFile(join(cwd, "fix.ts"), "export const injected_outside_task = true;\n");
+    await git.run(["add", "--", "fix.ts"]);
+    await expect(advanceSdd(cwd)).rejects.toThrow(/Dirty or staged content outside delegated implementation orchestration/);
+    expect(await git.head()).toBe(integratedHead);
+    expect((await loadState(cwd))?.phase).toBe("implement");
+    await expect(readFile(join(cwd, attemptPhasePath(id, 1, "review")), "utf8")).rejects.toThrow();
+    await git.run(["restore", "--staged", "--worktree", "--", "fix.ts"]);
+
     await writeFile(join(cwd, "forged.ts"), "export const forged = true;\n");
     await git.commit(["forged.ts"], "feat: forged orchestrator write", { work: id, task: "remediation-fix", attempt: "1" });
     await expect(advanceSdd(cwd)).rejects.toThrow(/not integrated from a task in the current attempt/);
