@@ -4,9 +4,9 @@
   "mode": "sdd",
   "id": "review-remediation",
   "status": "active",
-  "gateCommit": "2c0d16f7d7f28211f3a0022e8a8a9af74672877c",
-  "updatedAt": "2026-09-03T06:42:07.813Z",
-  "phase": "assess",
+  "gateCommit": "5cfbaa842bbe0fb7a1ec70a4a86e410bcad937af",
+  "updatedAt": "2026-09-03T06:42:30.361Z",
+  "phase": "specify",
   "humanGate": false,
   "profile": "autonomous",
   "execution": "delegated"
