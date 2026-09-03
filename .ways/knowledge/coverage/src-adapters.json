@@ -1,0 +1,1 @@
+{"schemaVersion":1,"id":"src-adapters","globs":["src/adapters/**"],"classification":"concept-backed","concepts":["conventions/provider-adapters","features/portable-workflows"]}

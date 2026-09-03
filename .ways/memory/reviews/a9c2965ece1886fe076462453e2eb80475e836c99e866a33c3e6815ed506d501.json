@@ -1,0 +1,17 @@
+{
+  "schemaVersion": 1,
+  "kind": "bootstrap",
+  "review": {
+    "schemaVersion": 1,
+    "workId": "memory-discovery",
+    "reviewer": "baseline/reviewer",
+    "digest": "a9c2965ece1886fe076462453e2eb80475e836c99e866a33c3e6815ed506d501",
+    "verdict": "pass",
+    "findings": []
+  },
+  "watermark": {
+    "revision": "70416094e2830121c5385d5747712056505a4c66",
+    "digest": "1437500d81690f7742c22d7128dbd9d8c5c38a5dac96e8a1b2c8f8510da88602",
+    "reviewDigest": "a9c2965ece1886fe076462453e2eb80475e836c99e866a33c3e6815ed506d501"
+  }
+}
