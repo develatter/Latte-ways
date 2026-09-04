@@ -6,11 +6,11 @@
   "status": "active",
   "profile": "autonomous",
   "execution": "delegated",
-  "phase": "implement",
+  "phase": "review",
   "baseCommit": "51d3090cba27ba63193dd7769af1ff14d58139c0",
-  "gateCommit": "7ff3093bd4ea7c446c3da3bb3b833ec9e28cd185",
+  "gateCommit": "f620239fd8048e52f849a3ab4006d57b073f2317",
   "createdAt": "2026-09-03T06:33:45.142Z",
-  "updatedAt": "2026-09-04T06:20:49.836Z",
+  "updatedAt": "2026-09-04T10:34:15.983Z",
   "tasks": [
     {
       "id": "attempt-contracts",
@@ -139,6 +139,36 @@
       ],
       "branch": "ways/review-remediation/attempt-1/attempt-1-artifact-evidence",
       "worktree": "/Users/alejandro.lopez/projects/Latte-ways/.ways/worktrees/review-remediation/attempt-1/attempt-1-artifact-evidence"
+    },
+    {
+      "id": "attempt-2-artifact-integration",
+      "title": "Reject integrated task commits that mutate immutable prior-attempt artifacts before implementation certification",
+      "attempt": 2,
+      "status": "completed",
+      "dependsOn": [],
+      "commits": [
+        "f620239fd8048e52f849a3ab4006d57b073f2317"
+      ],
+      "branch": "ways/review-remediation/attempt-2/attempt-2-artifact-integration",
+      "worktree": "/Users/alejandro.lopez/projects/Latte-ways/.ways/worktrees/review-remediation/attempt-2/attempt-2-artifact-integration"
+    },
+    {
+      "id": "attempt-2-validation-evidence",
+      "title": "Make validation remediation failure evidence deterministically linked to a recorded failed validation gate",
+      "attempt": 2,
+      "status": "completed",
+      "dependsOn": [],
+      "commits": [
+        "c54a992dd0b64e43deb4313aa4148f476eac8db5",
+        "5716747403304fb08695e5e49d7454721c3e664d",
+        "2004578ee08512e713b299f58f3c6f5c3d011f24",
+        "1e256f5cfc51af7d7f3e64f0e3eae47661697a44",
+        "365f3211742b14aae2ecadfe1dc9c239cad80c06",
+        "928936954b017ddf516dee7c2f83be7d647a2048",
+        "2a3da22e0a4b1b629dd809f1cbfd2aa58ed94216"
+      ],
+      "branch": "ways/review-remediation/attempt-2/attempt-2-validation-evidence",
+      "worktree": "/Users/alejandro.lopez/projects/Latte-ways/.ways/worktrees/review-remediation/attempt-2/attempt-2-validation-evidence"
     }
   ],
   "attempt": 2,
@@ -174,5 +204,6 @@
     "priorCheckpoint": "7ff3093bd4ea7c446c3da3bb3b833ec9e28cd185",
     "attempt": 2,
     "timestamp": "2026-09-04T06:20:49.836Z"
-  }
+  },
+  "lastCompletedPhase": "implement"
 }
