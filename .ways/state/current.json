@@ -6,11 +6,11 @@
   "status": "active",
   "profile": "autonomous",
   "execution": "delegated",
-  "phase": "implement",
+  "phase": "review",
   "baseCommit": "51d3090cba27ba63193dd7769af1ff14d58139c0",
-  "gateCommit": "11efed7ab19b65fe6181be33e33b62e5ad36ba61",
+  "gateCommit": "e52f7503f8b2578fe8b41444a021a20bf0dcdb1f",
   "createdAt": "2026-09-03T06:33:45.142Z",
-  "updatedAt": "2026-09-03T12:07:36.978Z",
+  "updatedAt": "2026-09-04T06:18:15.231Z",
   "tasks": [
     {
       "id": "attempt-contracts",
@@ -103,6 +103,42 @@
       ],
       "branch": "ways/review-remediation/attempt-0/remediation-adversarial",
       "worktree": "/Users/alejandro.lopez/projects/Latte-ways/.ways/worktrees/review-remediation/attempt-0/remediation-adversarial"
+    },
+    {
+      "id": "attempt-1-provenance",
+      "title": "Fix RR-001 by rejecting dirty or staged non-orchestration paths before delegated implementation certification and prove task provenance",
+      "attempt": 1,
+      "status": "completed",
+      "dependsOn": [],
+      "commits": [
+        "ebc12879871b6a0474521da21ce8e0755b4e7837"
+      ],
+      "branch": "ways/review-remediation/attempt-1/attempt-1-provenance",
+      "worktree": "/Users/alejandro.lopez/projects/Latte-ways/.ways/worktrees/review-remediation/attempt-1/attempt-1-provenance"
+    },
+    {
+      "id": "attempt-1-approval-path",
+      "title": "Fix RR-004 by directing and binding supervised approvals to the active attempt-scoped phase artifact",
+      "attempt": 1,
+      "status": "completed",
+      "dependsOn": [],
+      "commits": [
+        "09e83501971812fcfc71f256bbd70a92fc6a9a3b"
+      ],
+      "branch": "ways/review-remediation/attempt-1/attempt-1-approval-path",
+      "worktree": "/Users/alejandro.lopez/projects/Latte-ways/.ways/worktrees/review-remediation/attempt-1/attempt-1-approval-path"
+    },
+    {
+      "id": "attempt-1-artifact-evidence",
+      "title": "Fix RR-002 and RR-003 with immutable prior artifacts, stable remediation baselines, and replayed failed-gate evidence",
+      "attempt": 1,
+      "status": "completed",
+      "dependsOn": [],
+      "commits": [
+        "e52f7503f8b2578fe8b41444a021a20bf0dcdb1f"
+      ],
+      "branch": "ways/review-remediation/attempt-1/attempt-1-artifact-evidence",
+      "worktree": "/Users/alejandro.lopez/projects/Latte-ways/.ways/worktrees/review-remediation/attempt-1/attempt-1-artifact-evidence"
     }
   ],
   "attempt": 1,
@@ -149,5 +185,6 @@
     "priorCheckpoint": "11efed7ab19b65fe6181be33e33b62e5ad36ba61",
     "attempt": 1,
     "timestamp": "2026-09-03T12:07:36.978Z"
-  }
+  },
+  "lastCompletedPhase": "implement"
 }
