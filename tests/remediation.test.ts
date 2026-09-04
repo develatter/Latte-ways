@@ -11,9 +11,10 @@ import { checkHistory } from "../src/integrity/history.js";
 import { checkIntegrity } from "../src/integrity/integrity.js";
 import { loadState, saveState } from "../src/state/store.js";
 import { approveInteractively } from "../src/work/approve.js";
-import { attemptPhasePath, attemptReviewPath, remediationRecordPath } from "../src/work/attempt.js";
+import { attemptPhasePath, attemptReviewPath, remediationRecordPath, validationFailureRecordPath } from "../src/work/attempt.js";
 import { reviewDigest, submitReview } from "../src/work/review.js";
 import { remediateSdd } from "../src/work/remediation.js";
+import { recordValidationFailure } from "../src/work/validation-failure.js";
 import { advanceSdd } from "../src/work/sdd.js";
 
 const targets: RemediationTarget[] = ["implement", "decompose", "plan", "specify"];
@@ -82,7 +83,7 @@ async function validateRepository(testExit = 7): Promise<{ cwd: string; git: Git
     gateCommit: reviewParent, createdAt: now, updatedAt: now, tasks: [],
   });
   await git.commit(await git.changedPaths(), "review", { work: "failing", phase: "review", state: "completed" });
-  await writeFile(join(cwd, ".ways/sdd/failing/validate.md"), "# validate\n\nGoal: run all checks\nEvidence: configured tests exited 7\nDecision: fail\nGate: remediate\n");
+  await recordValidationFailure(cwd);
   return { cwd, git, prior: await git.head() };
 }
 
@@ -94,7 +95,7 @@ async function expectTransition(cwd: string, git: GitRepository, source: "review
   expect(state.lastCompletedPhase).toBeUndefined();
   const recordedSource = await readFile(join(cwd, `.ways/sdd/failing/${source}.md`), "utf8");
   expect(recordedSource).toContain(oldSource.trimEnd());
-  if (source === "validate") expect(recordedSource).toMatch(/^Failure-Digest: [0-9a-f]{64}$/m);
+  if (source === "validate") expect(await readFile(join(cwd, validationFailureRecordPath("failing", 0)), "utf8")).toContain('"phase": "validate"');
   expect(await readFile(join(cwd, attemptPhasePath("failing", 1, target)), "utf8")).toContain(`# ${target}`);
   const record = JSON.parse(await readFile(join(cwd, remediationRecordPath("failing", 1)), "utf8"));
   expect(record).toMatchObject({ source, target, attempt: 1, priorCheckpoint: prior });
@@ -131,17 +132,17 @@ describe("SDD remediation transitions", { timeout: 120_000 }, () => {
     expect((await loadState(cwd))?.attempt).toBeUndefined();
   });
 
-  it.each(["review", "validate"] as const)("allows a genuine filled active %s source artifact and preserves its failure evidence", async (source) => {
+  it.each(["review", "validate"] as const)("preserves genuine active %s failure evidence", async (source) => {
     const fixture = source === "review" ? await reviewRepository() : await validateRepository();
     const sourcePath = attemptPhasePath("failing", 0, source);
     const sourceArtifact = await readFile(join(fixture.cwd, sourcePath), "utf8");
-    expect(sourceArtifact).toMatch(/Goal: .+\nEvidence: .+\nDecision: fail\nGate: remediate/);
+    if (source === "review") expect(sourceArtifact).toMatch(/Goal: .+\nEvidence: .+\nDecision: fail\nGate: remediate/);
 
     const hash = await remediateSdd(fixture.cwd, "implement", `address ${source} failure`);
 
     const recordedSource = await readFile(join(fixture.cwd, sourcePath), "utf8");
     expect(recordedSource).toContain(sourceArtifact.trimEnd());
-    if (source === "validate") expect(recordedSource).toMatch(/^Failure-Digest: [0-9a-f]{64}$/m);
+    if (source === "validate") expect(await readFile(join(fixture.cwd, validationFailureRecordPath("failing", 0)), "utf8")).toContain('"digest":');
     expect(await fixture.git.run(["show", `${hash}:${sourcePath}`])).toBe(recordedSource.trimEnd());
     const record = JSON.parse(await readFile(join(fixture.cwd, remediationRecordPath("failing", 1)), "utf8"));
     expect(record.evidence.kind).toBe(source);
@@ -149,7 +150,7 @@ describe("SDD remediation transitions", { timeout: 120_000 }, () => {
       expect(record.evidence.review.verdict).toBe("fail");
       expect(await fixture.git.run(["show", `${hash}:${fixture.reviewPath}`])).toContain('"verdict": "fail"');
     } else {
-      expect(record.evidence.failures).toContainEqual(expect.objectContaining({ check: "configured-tests" }));
+      expect(record.evidence.failureRecord).toMatchObject({ commit: fixture.prior });
     }
   });
 
@@ -167,7 +168,11 @@ describe("SDD remediation transitions", { timeout: 120_000 }, () => {
     } else {
       evidence = {
         kind: "validate",
-        failures: [{ check: "configured-tests", detail: "Configured test command exited with status 7" }],
+        failureRecord: {
+          commit: "0".repeat(40),
+          tree: "0".repeat(40),
+          digest: "0".repeat(64),
+        },
       };
     }
     const timestamp = new Date().toISOString();
@@ -212,6 +217,62 @@ describe("SDD remediation transitions", { timeout: 120_000 }, () => {
     expect((await checkIntegrity(fixture.cwd)).map((issue) => issue.code)).toContain("state-git-divergence");
   });
 
+  it("commits replayable validation results before linking them into remediation", async () => {
+    const { cwd, git, prior } = await validateRepository();
+    const path = validationFailureRecordPath("failing", 0);
+    const failure = JSON.parse(await readFile(join(cwd, path), "utf8"));
+    expect(failure).toMatchObject({ workId: "failing", attempt: 0, phase: "validate", inputCommit: await git.parent(prior) });
+    expect(failure.inputTree).toBe(await git.run(["rev-parse", `${failure.inputCommit}^{tree}`]));
+    expect(await checkHistory(cwd)).toEqual([]);
+    expect(await checkIntegrity(cwd)).toEqual([]);
+
+    await remediateSdd(cwd, "implement", "link replayable failure");
+    const transition = JSON.parse(await readFile(join(cwd, remediationRecordPath("failing", 1)), "utf8"));
+    expect(transition.evidence).toMatchObject({ kind: "validate", failureRecord: { commit: prior, digest: failure.digest } });
+    expect(await readFile(join(cwd, attemptPhasePath("failing", 0, "validate")), "utf8")).not.toContain("Failure-Digest:");
+  });
+
+  it("rejects forged validation digests and transition-only validation evidence", async () => {
+    const { cwd, git, prior } = await validateRepository();
+    const path = validationFailureRecordPath("failing", 0);
+    const forged = JSON.parse(await readFile(join(cwd, path), "utf8"));
+    forged.digest = "0".repeat(64);
+    await writeFile(join(cwd, path), `${JSON.stringify(forged, null, 2)}\n`);
+    await git.run(["add", path]);
+    await git.run(["commit", "-q", "--no-verify", "--amend", "--no-edit"]);
+    expect((await checkHistory(cwd)).map((issue) => issue.code)).toContain("history-invalid-validation-failure");
+    await expect(remediateSdd(cwd, "implement", "link forged failure")).rejects.toThrow(/committed validation failure record/);
+    expect(await git.head()).not.toBe(prior);
+  });
+
+  it("accepts a correctly staged validation failure record in the commit hook", async () => {
+    const { cwd, git } = await validateRepository();
+    await git.run(["reset", "--soft", "HEAD^"]);
+    const verdict = await judgeCommitMessage(cwd, "record validation failure\n\nHarness-Work: failing\nHarness-Phase: validate\nHarness-State: validation-failed");
+    expect(verdict).toMatchObject({ accepted: true });
+  });
+
+  it("records failed checks through the CLI and preserves the passing validate path", async () => {
+    const failing = await validateRepository();
+    await failing.git.run(["reset", "--hard", "HEAD^"]);
+    const error = vi.spyOn(console, "error").mockImplementation(() => undefined);
+    try {
+      expect(await run(["sdd", "validate"], failing.cwd)).toBe(1);
+    } finally {
+      error.mockRestore();
+    }
+    expect(await readFile(join(failing.cwd, validationFailureRecordPath("failing", 0)), "utf8")).toContain('"testExitCode": 7');
+
+    const passing = await validateRepository(0);
+    const log = vi.spyOn(console, "log").mockImplementation(() => undefined);
+    try {
+      expect(await run(["sdd", "validate"], passing.cwd)).toBe(0);
+      expect(log).toHaveBeenCalledWith("SDD validation passed.");
+    } finally {
+      log.mockRestore();
+    }
+  });
+
   it("opens a remediation from the CLI and projects its attempt in status", async () => {
     const { cwd } = await reviewRepository();
     const log = vi.spyOn(console, "log").mockImplementation(() => undefined);
@@ -245,7 +306,7 @@ describe("SDD remediation transitions", { timeout: 120_000 }, () => {
     ["previously certified artifact", ".ways/sdd/failing/review.md", false],
     ["staged production", "implementation.ts", true],
     ["other dirty content", "unrelated.txt", false],
-  ] as const)("rejects %s even while the genuine active validate source artifact is filled", async (_label, path, staged) => {
+  ] as const)("rejects %s even with a committed validation failure record", async (_label, path, staged) => {
     const { cwd, git, prior } = await validateRepository();
     await writeFile(join(cwd, path), "unrelated mutation\n");
     if (staged) await git.run(["add", path]);
@@ -293,7 +354,7 @@ describe("SDD remediation transitions", { timeout: 120_000 }, () => {
 
   it("rejects passing validation and empty reasons without mutation", async () => {
     const passing = await validateRepository(0);
-    await expect(remediateSdd(passing.cwd, "implement", "fix it")).rejects.toThrow(/Passing validation/);
+    await expect(remediateSdd(passing.cwd, "implement", "fix it")).rejects.toThrow(/committed validation failure record/);
     expect(await passing.git.head()).toBe(passing.prior);
     expect((await loadState(passing.cwd))?.attempt).toBeUndefined();
 

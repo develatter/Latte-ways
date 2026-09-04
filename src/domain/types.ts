@@ -115,12 +115,38 @@ export interface ValidationCheckFailure {
   detail: string;
 }
 
-export interface ValidationFailureEvidence {
+export interface ValidationFailureRecord {
+  schemaVersion: 1;
+  workId: string;
+  attempt: number;
+  phase: "validate";
+  /** Immutable commit and tree on which the checks were run. */
+  inputCommit: string;
+  inputTree: string;
+  testCommand: string[];
+  checks: {
+    integrity: Array<{ code: string; path: string; message: string }>;
+    testExitCode?: number;
+  };
+  digest: string;
+}
+
+/** Legacy inline failures remain readable; new remediation links a committed failure record. */
+export interface LegacyValidationFailureEvidence {
   kind: "validate";
   failures: ValidationCheckFailure[];
 }
 
-export type RemediationEvidence = ReviewFailureEvidence | ValidationFailureEvidence;
+export interface ValidationFailureEvidence {
+  kind: "validate";
+  failureRecord: {
+    commit: string;
+    tree: string;
+    digest: string;
+  };
+}
+
+export type RemediationEvidence = ReviewFailureEvidence | LegacyValidationFailureEvidence | ValidationFailureEvidence;
 
 /** The attempt-scoped state needed to reopen an SDD work without erasing its prior gate. */
 export interface RemediationMetadata {

@@ -20,6 +20,7 @@ import { approveInteractively } from "./work/approve.js";
 import { reviewDigest, submitReview } from "./work/review.js";
 import { advanceSdd, downgradeSdd, startSdd } from "./work/sdd.js";
 import { remediateSdd } from "./work/remediation.js";
+import { recordValidationFailure } from "./work/validation-failure.js";
 import { addTask, integrateTask, prepareTask } from "./work/tasks.js";
 import { applyUpgrade, planUpgrade } from "./upgrade/upgrade.js";
 
@@ -149,6 +150,15 @@ export async function run(argv: readonly string[], cwd = process.cwd()): Promise
       console.log(`SDD downgraded: ${await downgradeSdd(cwd, id)}`);
       return 0;
     }
+    if (action === "validate" && id === undefined) {
+      const failure = await recordValidationFailure(cwd);
+      if (!failure) {
+        console.log("SDD validation passed.");
+        return 0;
+      }
+      console.error(`SDD validation failed and was recorded: ${failure.digest}`);
+      return 1;
+    }
     if (action === "remediate") {
       if (id !== "implement" && id !== "decompose" && id !== "plan" && id !== "specify") {
         throw new Error("Usage: ways sdd remediate <implement|decompose|plan|specify> --reason=<text>");
@@ -160,7 +170,7 @@ export async function run(argv: readonly string[], cwd = process.cwd()): Promise
       console.log(`SDD remediation opened: ${commit} (attempt ${state?.attempt ?? 0}, ${state?.remediation?.source ?? "unknown"} -> ${id}).`);
       return 0;
     }
-    throw new Error("Usage: ways sdd start <id> [--supervised] [--delegated] | advance | remediate <implement|decompose|plan|specify> --reason=<text> | downgrade <quick|plan>");
+    throw new Error("Usage: ways sdd start <id> [--supervised] [--delegated] | advance | validate | remediate <implement|decompose|plan|specify> --reason=<text> | downgrade <quick|plan>");
   }
 
   if (command === "adapter") {

@@ -6,6 +6,7 @@ import { GitRepository, type CommitInfo } from "../git/git.js";
 import { loadState } from "../state/store.js";
 import { attemptPhasePath, attemptReviewPath, isPriorAttemptArtifact, remediationRecordPath } from "../work/attempt.js";
 import { remediationEvidenceFailure } from "../work/remediation.js";
+import { committedValidationFailureFailure } from "../work/validation-failure.js";
 import type { IntegrityIssue } from "./integrity.js";
 
 export interface HistoryOptions {
@@ -88,6 +89,13 @@ export function replayCommits(commits: readonly CommitInfo[], activeId?: string)
       issue(issues, commit, "history-attempt-mismatch", `Approval commit for ${work} does not belong to the current phase and remediation attempt`);
       continue;
     }
+    if (state === "validation-failed") {
+      const attempt = parsedAttempt(commit.trailers.attempt);
+      if (phase !== "validate" || attempt === undefined || attempt !== current.attempt || current.nextPhase !== "validate") {
+        issue(issues, commit, "history-invalid-validation-failure", `Validation failure record for ${work} is not in validate of attempt ${current.attempt}`);
+      }
+      continue;
+    }
     const remediationMatch = state?.match(/^remediated-(.+)$/);
     if (state?.startsWith("remediated") && !remediationMatch) {
       issue(issues, commit, "history-invalid-remediation", `Remediation transition for ${work} has a malformed Harness-State trailer`);
@@ -163,6 +171,21 @@ async function remediationEvidenceIssues(git: GitRepository, checkpoints: readon
   return issues;
 }
 
+async function validationFailureIssues(git: GitRepository, commits: readonly CommitInfo[]): Promise<IntegrityIssue[]> {
+  const issues: IntegrityIssue[] = [];
+  for (const commit of commits) {
+    if (commit.trailers.state !== "validation-failed") continue;
+    const attempt = parsedAttempt(commit.trailers.attempt);
+    if (!commit.trailers.work || commit.trailers.phase !== "validate" || attempt === undefined) {
+      issue(issues, commit, "history-invalid-validation-failure", "Validation failure record has malformed work, attempt, or phase trailers");
+      continue;
+    }
+    const failure = await committedValidationFailureFailure(git, commit.trailers.work, attempt, commit.hash);
+    if (failure) issue(issues, commit, "history-invalid-validation-failure", failure);
+  }
+  return issues;
+}
+
 async function priorArtifactMutationIssues(git: GitRepository, commits: readonly CommitInfo[]): Promise<IntegrityIssue[]> {
   const issues: IntegrityIssue[] = [];
   for (const commit of commits) {
@@ -174,8 +197,10 @@ async function priorArtifactMutationIssues(git: GitRepository, commits: readonly
     if (state?.startsWith("remediated-") && (phase === "review" || phase === "validate")) {
       const sourceAttempt = attempt - 1;
       allowed.add(remediationRecordPath(work, attempt));
-      allowed.add(attemptPhasePath(work, sourceAttempt, phase));
-      if (phase === "review") allowed.add(attemptReviewPath(work, sourceAttempt));
+      if (phase === "review") {
+        allowed.add(attemptPhasePath(work, sourceAttempt, phase));
+        allowed.add(attemptReviewPath(work, sourceAttempt));
+      }
     }
     const changed = (await git.run(["diff-tree", "--no-commit-id", "--name-only", "-r", commit.hash])).split("\n").filter(Boolean);
     const protectedPath = changed.find((path) => !allowed.has(path) && isPriorAttemptArtifact(path, work, attempt));
@@ -189,6 +214,7 @@ export async function auditHistory(git: GitRepository, commits: readonly CommitI
   return { ...replayed, issues: [
     ...replayed.issues,
     ...await remediationEvidenceIssues(git, replayed.checkpoints),
+    ...await validationFailureIssues(git, commits),
     ...await priorArtifactMutationIssues(git, commits),
   ] };
 }

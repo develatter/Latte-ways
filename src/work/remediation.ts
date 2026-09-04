@@ -1,6 +1,5 @@
 import { readFile } from "node:fs/promises";
 import { join } from "node:path";
-import { runChecks, type CheckResult } from "../check/check.js";
 import type {
   RemediationEvidence,
   RemediationRecord,
@@ -12,9 +11,10 @@ import { validateRemediation, validateReview } from "../domain/validation.js";
 import { sha256, stableJson, writeAtomic } from "../fs/files.js";
 import { GitRepository } from "../git/git.js";
 import { loadState, saveState } from "../state/store.js";
-import { attemptNumber, attemptPhasePath, attemptReviewPath, remediationRecordPath, remediationTransitionCommit } from "./attempt.js";
+import { attemptNumber, attemptPhasePath, attemptReviewPath, remediationRecordPath, remediationTransitionCommit, validationFailureRecordPath } from "./attempt.js";
 import { committedWorkDigest, implementationDigest } from "./digest.js";
 import { assertSddConsistency, createSddPhaseFile } from "./sdd.js";
+import { currentValidationFailureRecord, committedValidationFailureFailure } from "./validation-failure.js";
 
 function requireSource(state: WorkState | undefined): WorkState & { phase: "review" | "validate" } {
   if (!state || state.mode !== "sdd" || (state.phase !== "review" && state.phase !== "validate")) {
@@ -62,32 +62,20 @@ async function failedReviewEvidence(cwd: string, state: WorkState): Promise<Reme
   return { kind: "review", review: review as ReviewResult & { verdict: "fail" } };
 }
 
-function validationEvidence(result: CheckResult): RemediationEvidence {
-  const failures = result.issues.map((issue) => ({
-    check: `integrity:${issue.code}`,
-    detail: `${issue.path}: ${issue.message}`,
-  }));
-  if (result.testExitCode !== undefined && result.testExitCode !== 0) {
-    failures.push({ check: "configured-tests", detail: `Configured test command exited with status ${result.testExitCode}` });
-  }
-  if (failures.length === 0) throw new Error("Passing validation cannot be used as remediation evidence");
-  return { kind: "validate", failures };
-}
-
 export function failureEvidenceDigest(evidence: RemediationEvidence): string {
   return sha256(stableJson(evidence));
 }
 
-/** Record the exact evidence object in the failed phase artifact without replacing human context. */
-async function recordFailureGate(cwd: string, state: WorkState, evidence: RemediationEvidence): Promise<void> {
-  const path = join(cwd, attemptPhasePath(state.id, state.attempt, state.phase!));
-  const marker = `Failure-Digest: ${failureEvidenceDigest(evidence)}`;
-  let content = await readFile(path, "utf8");
-  content = content.replace(/^Decision:\s*.*$/m, "Decision: fail").replace(/^Gate:\s*.*$/m, "Gate: remediate");
-  content = /^Failure-Digest:\s*.*$/m.test(content)
-    ? content.replace(/^Failure-Digest:\s*.*$/m, marker)
-    : `${content.trimEnd()}\n${marker}\n`;
-  await writeAtomic(path, content);
+async function failedValidationEvidence(git: GitRepository, state: WorkState): Promise<RemediationEvidence> {
+  const failure = await currentValidationFailureRecord(git, state);
+  return {
+    kind: "validate",
+    failureRecord: {
+      commit: await git.head(),
+      tree: await git.run(["rev-parse", "HEAD^{tree}"]),
+      digest: failure.digest,
+    },
+  };
 }
 
 async function certificationBefore(git: GitRepository, workId: string, phase: string, ref: string): Promise<string> {
@@ -145,6 +133,24 @@ export async function remediationEvidenceFailure(
     return undefined;
   }
 
+  if ("failureRecord" in record.evidence) {
+    const linked = record.evidence.failureRecord;
+    if (linked.commit !== parent || linked.tree !== await git.run(["rev-parse", `${parent}^{tree}`])) {
+      return "remediation validation evidence is not linked to its immediate committed failure record";
+    }
+    const failure = await committedValidationFailureFailure(git, record.workId, record.attempt - 1, linked.commit);
+    if (failure) return failure;
+    try {
+      const value = JSON.parse(await git.run(["show", `${linked.commit}:${validationFailureRecordPath(record.workId, record.attempt - 1)}`])) as { digest?: unknown };
+      if (value.digest !== linked.digest) return "remediation validation evidence does not match the committed failure digest";
+    } catch {
+      return "remediation validation evidence cannot read its committed failure record";
+    }
+    return undefined;
+  }
+
+  // v1 remediation records carried inline failures and a phase marker. Keep
+  // their history readable, but new transitions never take this branch.
   const validatePath = attemptPhasePath(record.workId, record.attempt - 1, "validate");
   if (!changed.has(validatePath)) return `failed validation gate was not captured at ${validatePath} in the transition`;
   try {
@@ -155,18 +161,6 @@ export async function remediationEvidenceFailure(
     }
   } catch {
     return `failed validation gate is missing at ${validatePath}`;
-  }
-  const seen = new Set<string>();
-  for (const failure of record.evidence.failures) {
-    if (seen.has(failure.check)) return `validation evidence duplicates ${failure.check}`;
-    seen.add(failure.check);
-    if (failure.check === "configured-tests") {
-      if (!/^Configured test command exited with status [1-9]\d*$/.test(failure.detail)) return "configured test failure has no valid nonzero exit status";
-    } else if (failure.check.startsWith("integrity:")) {
-      if (!/^.+: .+$/.test(failure.detail)) return `integrity failure ${failure.check} lacks deterministic path and detail evidence`;
-    } else {
-      return `validation evidence names an unknown check: ${failure.check}`;
-    }
   }
   return undefined;
 }
@@ -179,16 +173,11 @@ export async function remediateSdd(cwd: string, target: RemediationTarget, reaso
   await assertSddConsistency(cwd, state);
   const git = new GitRepository(cwd);
   const reviewPath = attemptReviewPath(state.id, state.attempt);
-  const allowed = new Set([attemptPhasePath(state.id, state.attempt, state.phase)]);
-  if (state.phase === "review") allowed.add(reviewPath);
-  const evidence = state.phase === "review"
+  const allowed = new Set(state.phase === "review" ? [attemptPhasePath(state.id, state.attempt, state.phase), reviewPath] : []);
+  const capturedEvidence = state.phase === "review"
     ? await failedReviewEvidence(cwd, state)
-    : undefined;
+    : await failedValidationEvidence(git, state);
   await assertOnlyAllowedChanges(git, allowed);
-  const capturedEvidence = evidence ?? validationEvidence(await runChecks(cwd));
-  // Tests and integrity checks are not allowed to leave content behind.
-  await assertOnlyAllowedChanges(git, allowed);
-  if (state.phase === "validate") await recordFailureGate(cwd, state, capturedEvidence);
 
   const priorCheckpoint = await git.head();
   const source = state.phase;

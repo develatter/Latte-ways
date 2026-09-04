@@ -49,6 +49,11 @@ export function remediationRecordPath(workId: string, attempt: number): string {
   return attemptArtifactPath(workId, attempt, "remediation.json");
 }
 
+/** A failed validation is recorded before, not fabricated during, remediation. */
+export function validationFailureRecordPath(workId: string, attempt: number | undefined): string {
+  return attemptArtifactPath(workId, attempt, "validation-failure.json");
+}
+
 /** Resolve a transition from its committed parent identity, never from path history. */
 export async function remediationTransitionCommit(
   git: GitRepository,
@@ -81,5 +86,5 @@ export function isPriorAttemptArtifact(path: string, workId: string, currentAtte
   const artifact = nested ? nested[2]! : relative;
   if (artifactAttempt > currentAttempt) return false;
   if (artifactAttempt === currentAttempt) return artifact === "remediation.json";
-  return /^(?:[a-z][a-z-]*\.md|remediation\.json|reviews\/[^/]+\.json|approvals\/[^/]+\.json)$/.test(artifact);
+  return /^(?:[a-z][a-z-]*\.md|remediation\.json|validation-failure\.json|reviews\/[^/]+\.json|approvals\/[^/]+\.json)$/.test(artifact);
 }

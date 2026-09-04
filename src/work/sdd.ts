@@ -12,6 +12,7 @@ import { approvalPath, assertApproved, requiresApproval } from "./approve.js";
 import { attemptNumber, attemptPhasePath, remediationTransitionCommit } from "./attempt.js";
 import { assertReviewPassed } from "./review.js";
 import { assertDelegatedCertificationTree, assertDelegatedImplementation } from "./tasks.js";
+import { committedValidationFailureFailure } from "./validation-failure.js";
 
 function phasePath(state: WorkState, phase: SddPhase): string {
   return attemptPhasePath(state.id, state.attempt, phase);
@@ -65,6 +66,14 @@ export async function assertSddConsistency(cwd: string, state: WorkState): Promi
       || transition.trailers.state !== `remediated-${remediation.target}` || transition.trailers.attempt !== String(attempt)
       || await git.parent(transitionHash) !== remediation.priorCheckpoint || state.gateCommit !== remediation.priorCheckpoint) {
       throw new Error("Remediation transition does not match active state; run ways repair");
+    }
+    if (remediation.source === "validate" && "failureRecord" in remediation.evidence) {
+      const linked = remediation.evidence.failureRecord;
+      if (linked.commit !== remediation.priorCheckpoint || linked.tree !== await git.run(["rev-parse", `${linked.commit}^{tree}`])) {
+        throw new Error("Validation remediation is not linked to its committed failure record; run ways repair");
+      }
+      const failure = await committedValidationFailureFailure(git, state.id, attempt - 1, linked.commit);
+      if (failure) throw new Error(`Validation remediation failure record is invalid: ${failure}; run ways repair`);
     }
     return;
   }

@@ -71,6 +71,12 @@
       }
     },
     "validationEvidence": {
+      "oneOf": [
+        { "$ref": "#/$defs/legacyValidationEvidence" },
+        { "$ref": "#/$defs/recordedValidationEvidence" }
+      ]
+    },
+    "legacyValidationEvidence": {
       "type": "object",
       "additionalProperties": false,
       "required": ["kind", "failures"],
@@ -87,6 +93,24 @@
               "check": { "type": "string", "minLength": 1 },
               "detail": { "type": "string", "minLength": 1 }
             }
+          }
+        }
+      }
+    },
+    "recordedValidationEvidence": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["kind", "failureRecord"],
+      "properties": {
+        "kind": { "const": "validate" },
+        "failureRecord": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["commit", "tree", "digest"],
+          "properties": {
+            "commit": { "type": "string", "pattern": "^[0-9a-f]{40}$" },
+            "tree": { "type": "string", "pattern": "^[0-9a-f]{40}$" },
+            "digest": { "type": "string", "pattern": "^[0-9a-f]{64}$" }
           }
         }
       }

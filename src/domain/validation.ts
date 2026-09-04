@@ -2,9 +2,9 @@ import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import type { AnySchema, ErrorObject, ValidateFunction } from "ajv";
 import { Ajv2020 } from "ajv/dist/2020.js";
-import type { ApprovalRecord, HarnessConfig, ManagedManifest, RemediationRecord, ReviewResult, WorkState } from "./types.js";
+import type { ApprovalRecord, HarnessConfig, ManagedManifest, RemediationRecord, ReviewResult, ValidationFailureRecord, WorkState } from "./types.js";
 
-type SchemaName = "config" | "manifest" | "state" | "task" | "review" | "approval" | "remediation";
+type SchemaName = "config" | "manifest" | "state" | "task" | "review" | "approval" | "remediation" | "validation-failure";
 
 export interface ValidationResult {
   valid: boolean;
@@ -46,9 +46,11 @@ function loadSchema(name: SchemaName): AnySchema {
 const taskSchema = loadSchema("task");
 const reviewSchema = loadSchema("review");
 const remediationSchema = loadSchema("remediation");
+const validationFailureSchema = loadSchema("validation-failure");
 ajv.addSchema(taskSchema);
 ajv.addSchema(reviewSchema);
 ajv.addSchema(remediationSchema);
+ajv.addSchema(validationFailureSchema);
 const validators: Record<Exclude<SchemaName, "task">, ValidateFunction> = {
   config: ajv.compile(loadSchema("config")),
   manifest: ajv.compile(loadSchema("manifest")),
@@ -56,6 +58,7 @@ const validators: Record<Exclude<SchemaName, "task">, ValidateFunction> = {
   review: ajv.getSchema("https://latte-ways.dev/schemas/review-v1.json")!,
   approval: ajv.compile(loadSchema("approval")),
   remediation: ajv.getSchema("https://latte-ways.dev/schemas/remediation-v1.json")!,
+  "validation-failure": ajv.getSchema("https://latte-ways.dev/schemas/validation-failure-v1.json")!,
 };
 
 function formatErrors(errors: ErrorObject[] | null | undefined): string[] {
@@ -90,6 +93,10 @@ export function validateApproval(value: unknown): value is ApprovalRecord {
 
 export function validateRemediation(value: unknown): value is RemediationRecord {
   return validate("remediation", value).valid;
+}
+
+export function validateValidationFailure(value: unknown): value is ValidationFailureRecord {
+  return validate("validation-failure", value).valid;
 }
 
 export function validationDetails(name: keyof typeof validators, value: unknown): ValidationResult {

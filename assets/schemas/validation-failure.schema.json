@@ -1,0 +1,46 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://latte-ways.dev/schemas/validation-failure-v1.json",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schemaVersion", "workId", "attempt", "phase", "inputCommit", "inputTree", "testCommand", "checks", "digest"],
+  "properties": {
+    "schemaVersion": { "const": 1 },
+    "workId": { "type": "string", "pattern": "^[a-z0-9][a-z0-9-]{1,62}$" },
+    "attempt": { "type": "integer", "minimum": 0, "maximum": 9007199254740991 },
+    "phase": { "const": "validate" },
+    "inputCommit": { "type": "string", "pattern": "^[0-9a-f]{40}$" },
+    "inputTree": { "type": "string", "pattern": "^[0-9a-f]{40}$" },
+    "testCommand": {
+      "type": "array",
+      "minItems": 1,
+      "items": { "type": "string", "minLength": 1 }
+    },
+    "checks": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["integrity"],
+      "properties": {
+        "integrity": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["code", "path", "message"],
+            "properties": {
+              "code": { "type": "string", "minLength": 1 },
+              "path": { "type": "string", "minLength": 1 },
+              "message": { "type": "string", "minLength": 1 }
+            }
+          }
+        },
+        "testExitCode": { "type": "integer", "minimum": 0 }
+      },
+      "anyOf": [
+        { "properties": { "integrity": { "type": "array", "minItems": 1 } }, "required": ["integrity"] },
+        { "properties": { "testExitCode": { "type": "integer", "minimum": 1 } }, "required": ["testExitCode"] }
+      ]
+    },
+    "digest": { "type": "string", "pattern": "^[0-9a-f]{64}$" }
+  }
+}

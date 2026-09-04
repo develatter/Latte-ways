@@ -10,8 +10,9 @@ import { GitRepository } from "../git/git.js";
 import { providerById } from "../adapters/install.js";
 import { readStatus, statusMatches } from "../state/status.js";
 import { commitsAfter } from "./history.js";
-import { isPriorAttemptArtifact, remediationRecordPath, remediationTransitionCommit } from "../work/attempt.js";
+import { isPriorAttemptArtifact, remediationRecordPath, remediationTransitionCommit, validationFailureRecordPath } from "../work/attempt.js";
 import { remediationEvidenceFailure } from "../work/remediation.js";
+import { committedValidationFailureFailure } from "../work/validation-failure.js";
 import { assertSddConsistency } from "../work/sdd.js";
 
 export interface IntegrityIssue {
@@ -105,6 +106,20 @@ export async function checkIntegrity(cwd: string): Promise<IntegrityIssue[]> {
       }
       if (activeState.mode === "sdd") {
         await assertSddConsistency(cwd, activeState);
+        if (activeState.phase === "validate") {
+          const validationPath = validationFailureRecordPath(activeState.id, activeState.attempt);
+          let recorded = false;
+          try {
+            await git.run(["cat-file", "-e", `HEAD:${validationPath}`]);
+            recorded = true;
+          } catch {
+            // No failure record exists until `ways sdd validate` fails.
+          }
+          if (recorded) {
+            const failure = await committedValidationFailureFailure(git, activeState.id, activeState.attempt ?? 0, head);
+            if (failure) throw new Error(failure);
+          }
+        }
         if (activeState.remediation && activeState.attempt) {
           const path = remediationRecordPath(activeState.id, activeState.attempt);
           const transition = await remediationTransitionCommit(git, activeState.id, activeState.remediation, head);

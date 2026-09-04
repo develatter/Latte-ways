@@ -1,12 +1,13 @@
 import { readFile } from "node:fs/promises";
 import { MANIFEST_PATH, STATE_PATH } from "../domain/constants.js";
 import type { RemediationRecord, WorkState } from "../domain/types.js";
-import { validateApproval, validateRemediation, validateState } from "../domain/validation.js";
+import { validateApproval, validateRemediation, validateState, validateValidationFailure } from "../domain/validation.js";
 import { GitRepository, parseTrailers } from "../git/git.js";
 import { loadState } from "../state/store.js";
 import { approvalBinds, approvalPath, requiresApproval } from "../work/approve.js";
-import { attemptNumber, attemptPhasePath, attemptReviewPath, isPriorAttemptArtifact, remediationRecordPath } from "../work/attempt.js";
+import { attemptNumber, attemptPhasePath, attemptReviewPath, isPriorAttemptArtifact, remediationRecordPath, validationFailureRecordPath } from "../work/attempt.js";
 import { remediationEvidenceFailure } from "../work/remediation.js";
+import { validationFailureRecordFailure } from "../work/validation-failure.js";
 import { committedMismatch } from "../work/sdd.js";
 
 export interface HookVerdict {
@@ -105,11 +106,13 @@ async function stagedPriorArtifactFailure(git: GitRepository, active: WorkState,
 function remediationTransitionArtifacts(active: WorkState): Set<string> {
   const remediation = active.remediation!;
   const sourceAttempt = attemptNumber(active.attempt) - 1;
-  const allowed = new Set([
-    remediationRecordPath(active.id, attemptNumber(active.attempt)),
-    attemptPhasePath(active.id, sourceAttempt, remediation.source),
-  ]);
-  if (remediation.source === "review") allowed.add(attemptReviewPath(active.id, sourceAttempt));
+  const allowed = new Set([remediationRecordPath(active.id, attemptNumber(active.attempt))]);
+  // Legacy review remediation captures its submitted review and phase context
+  // in the transition. Recorded validation failures were committed earlier.
+  if (remediation.source === "review") {
+    allowed.add(attemptPhasePath(active.id, sourceAttempt, remediation.source));
+    allowed.add(attemptReviewPath(active.id, sourceAttempt));
+  }
   return allowed;
 }
 
@@ -136,7 +139,26 @@ export async function judgeCommitMessage(cwd: string, message: string): Promise<
       if (!trailerAttemptMatches(trailers.attempt, active.attempt)) {
         return { accepted: false, reason: `Commit attempt does not match active remediation attempt ${attemptNumber(active.attempt)}` };
       }
-      if (trailers.state?.startsWith("remediated")) {
+      if (trailers.state === "validation-failed") {
+        if (trailers.phase !== "validate" || active.phase !== "validate") {
+          return { accepted: false, reason: "Validation failure trailers do not match the active validate phase" };
+        }
+        const path = validationFailureRecordPath(active.id, active.attempt);
+        const changed = (await git.run(["diff", "--cached", "--name-only", "HEAD"])).split("\n").filter(Boolean);
+        if (changed.length !== 1 || changed[0] !== path) {
+          return { accepted: false, reason: `Validation failure must stage only ${path}` };
+        }
+        try {
+          const value: unknown = JSON.parse(await git.run(["show", `:${path}`]));
+          if (!validateValidationFailure(value) || validationFailureRecordFailure(value) || value.workId !== active.id
+            || value.attempt !== attemptNumber(active.attempt) || value.inputCommit !== await git.head()
+            || value.inputTree !== await git.run(["rev-parse", "HEAD^{tree}"])) {
+            return { accepted: false, reason: "Validation failure record does not bind the current committed input" };
+          }
+        } catch {
+          return { accepted: false, reason: "Validation failure record is unreadable" };
+        }
+      } else if (trailers.state?.startsWith("remediated")) {
         const remediation = active.remediation;
         if (!trailers.state.startsWith("remediated-") || !remediation || trailers.phase !== remediation.source || trailers.state !== `remediated-${remediation.target}`) {
           return { accepted: false, reason: "Remediation trailers do not match active remediation state" };
