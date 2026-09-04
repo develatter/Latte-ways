@@ -1,8 +1,8 @@
 import { mkdir, mkdtemp, rm } from "node:fs/promises";
 import { join } from "node:path";
-import { runChecks } from "../check/check.js";
+import { runChecks, type CheckResult } from "../check/check.js";
 import { loadConfig } from "../config/config.js";
-import type { ValidationFailureRecord, WorkState } from "../domain/types.js";
+import type { LegacyValidationFailureEvidence, ValidationFailureRecord, WorkState } from "../domain/types.js";
 import { validateConfig, validateValidationFailure } from "../domain/validation.js";
 import { sha256, stableJson, writeAtomic } from "../fs/files.js";
 import { GitRepository } from "../git/git.js";
@@ -15,6 +15,18 @@ function canonicalChecks(result: Awaited<ReturnType<typeof runChecks>>): Validat
       .map(({ code, path, message }) => ({ code, path, message })),
     ...(result.testExitCode === undefined ? {} : { testExitCode: result.testExitCode }),
   };
+}
+
+/** The exact normalized shape written by the pre-record validation path. */
+export function legacyValidationEvidence(result: CheckResult): LegacyValidationFailureEvidence {
+  const failures = result.issues.map((issue) => ({
+    check: `integrity:${issue.code}`,
+    detail: `${issue.path}: ${issue.message}`,
+  }));
+  if (result.testExitCode !== undefined && result.testExitCode !== 0) {
+    failures.push({ check: "configured-tests", detail: `Configured test command exited with status ${result.testExitCode}` });
+  }
+  return { kind: "validate", failures };
 }
 
 export function validationFailureDigest(record: Omit<ValidationFailureRecord, "digest">): string {
@@ -78,6 +90,44 @@ export async function validationFailureReplayFailure(git: GitRepository, record:
     }
   } catch {
     replayFailure = "validation failure record check results cannot be replayed from its recorded input";
+  }
+  return await replayCleanupFailure(git, replayCwd) ?? replayFailure;
+}
+
+/**
+ * Legacy remediation stored only normalized failure strings in its transition.
+ * Recreate that old projection at the transition's exact parent and reject it
+ * unless it is byte-for-byte the claimed evidence.
+ */
+export async function legacyValidationFailureReplayFailure(
+  git: GitRepository,
+  inputCommit: string,
+  evidence: LegacyValidationFailureEvidence,
+): Promise<string | undefined> {
+  let inputTree: string;
+  try {
+    inputTree = await git.run(["rev-parse", `${inputCommit}^{tree}`]);
+  } catch {
+    return "legacy validation failure replay cannot resolve its recorded input commit and tree";
+  }
+  const root = await git.root();
+  const runtime = join(root, ".ways", "runtime");
+  await mkdir(runtime, { recursive: true });
+  const replayCwd = await mkdtemp(join(runtime, "validation-replay-"));
+  let replayFailure: string | undefined;
+  try {
+    await git.run(["worktree", "add", "--detach", "--force", replayCwd, inputCommit]);
+    const replayGit = new GitRepository(replayCwd);
+    if (await replayGit.head() !== inputCommit || await replayGit.run(["rev-parse", "HEAD^{tree}"]) !== inputTree) {
+      replayFailure = "legacy validation failure replay did not resolve its recorded input commit and tree";
+    } else {
+      const replayed = legacyValidationEvidence(await runChecks(replayCwd));
+      replayFailure = stableJson(replayed) === stableJson(evidence)
+        ? undefined
+        : "legacy validation failure results cannot be reproduced from its recorded input";
+    }
+  } catch {
+    replayFailure = "legacy validation failure results cannot be replayed from its recorded input";
   }
   return await replayCleanupFailure(git, replayCwd) ?? replayFailure;
 }

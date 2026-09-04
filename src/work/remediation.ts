@@ -14,7 +14,7 @@ import { loadState, saveState } from "../state/store.js";
 import { attemptNumber, attemptPhasePath, attemptReviewPath, remediationRecordPath, remediationTransitionCommit, validationFailureRecordPath } from "./attempt.js";
 import { committedWorkDigest, implementationDigest } from "./digest.js";
 import { assertSddConsistency, createSddPhaseFile } from "./sdd.js";
-import { currentValidationFailureRecord, committedValidationFailureFailure } from "./validation-failure.js";
+import { currentValidationFailureRecord, committedValidationFailureFailure, legacyValidationFailureReplayFailure } from "./validation-failure.js";
 
 function requireSource(state: WorkState | undefined): WorkState & { phase: "review" | "validate" } {
   if (!state || state.mode !== "sdd" || (state.phase !== "review" && state.phase !== "validate")) {
@@ -150,19 +150,22 @@ export async function remediationEvidenceFailure(
   }
 
   // v1 remediation records carried inline failures and a phase marker. Keep
-  // their history readable, but new transitions never take this branch.
+  // their history readable only when the claimed normalized result replays at
+  // the exact committed validation input; new transitions never take this path.
+  if (record.priorCheckpoint !== parent) return "legacy validation remediation does not bind its committed input";
   const validatePath = attemptPhasePath(record.workId, record.attempt - 1, "validate");
   if (!changed.has(validatePath)) return `failed validation gate was not captured at ${validatePath} in the transition`;
   try {
     const source = await git.run(["show", `${ref}:${validatePath}`]);
+    const markers = [...source.matchAll(/^Failure-Digest:\s*(\S+)\s*$/gm)];
     if (!/^Decision:\s*fail\s*$/m.test(source) || !/^Gate:\s*remediate\s*$/m.test(source)
-      || !new RegExp(`^Failure-Digest:\\s*${failureEvidenceDigest(record.evidence)}\\s*$`, "m").test(source)) {
+      || markers.length !== 1 || markers[0]![1] !== failureEvidenceDigest(record.evidence)) {
       return `failed validation gate at ${validatePath} is not bound to remediation evidence`;
     }
   } catch {
     return `failed validation gate is missing at ${validatePath}`;
   }
-  return undefined;
+  return legacyValidationFailureReplayFailure(git, parent, record.evidence);
 }
 
 export async function remediateSdd(cwd: string, target: RemediationTarget, reason: string): Promise<string> {

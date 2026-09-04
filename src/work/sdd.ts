@@ -76,6 +76,15 @@ export async function assertSddConsistency(cwd: string, state: WorkState): Promi
       const failure = await committedValidationFailureFailure(git, state.id, attempt - 1, linked.commit);
       if (failure) throw new Error(`Validation remediation failure record is invalid: ${failure}; run ways repair`);
     }
+    // Keep legacy inline validation transitions compatible, but subject them
+    // to the same committed-input evidence verification as history/integrity.
+    const { remediationEvidenceFailure } = await import("./remediation.js");
+    const evidenceFailure = await remediationEvidenceFailure(git, {
+      schemaVersion: 1,
+      workId: state.id,
+      ...remediation,
+    }, remediation.priorCheckpoint, transitionHash);
+    if (evidenceFailure) throw new Error(`Remediation evidence is invalid: ${evidenceFailure}; run ways repair`);
     return;
   }
   const commit = (await git.recentCommits()).find((candidate) => candidate.trailers.work === state.id

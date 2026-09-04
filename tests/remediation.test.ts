@@ -13,9 +13,9 @@ import { loadState, saveState } from "../src/state/store.js";
 import { approveInteractively } from "../src/work/approve.js";
 import { attemptPhasePath, attemptReviewPath, remediationRecordPath, validationFailureRecordPath } from "../src/work/attempt.js";
 import { reviewDigest, submitReview } from "../src/work/review.js";
-import { failureEvidenceDigest, remediateSdd } from "../src/work/remediation.js";
+import { failureEvidenceDigest, remediationEvidenceFailure, remediateSdd } from "../src/work/remediation.js";
 import { recordValidationFailure, validationFailureDigest, validationFailureReplayFailure } from "../src/work/validation-failure.js";
-import { advanceSdd } from "../src/work/sdd.js";
+import { advanceSdd, assertSddConsistency } from "../src/work/sdd.js";
 
 const targets: RemediationTarget[] = ["implement", "decompose", "plan", "specify"];
 
@@ -378,8 +378,11 @@ describe("SDD remediation transitions", { timeout: 120_000 }, () => {
     expect(await checkIntegrity(cwd)).toEqual([]);
   });
 
-  it("accepts legacy inline validation remediation while retaining prior-artifact protection", async () => {
+  it("accepts a reproducible legacy inline validation remediation while retaining prior-artifact protection", async () => {
     const legacy = await legacyValidationTransition();
+    const record = JSON.parse(await readFile(join(legacy.cwd, remediationRecordPath("failing", 1)), "utf8"));
+    expect(await remediationEvidenceFailure(legacy.git, record, legacy.prior, await legacy.git.head())).toBeUndefined();
+    await expect(assertSddConsistency(legacy.cwd, (await loadState(legacy.cwd))!)).resolves.toBeUndefined();
     expect(await checkHistory(legacy.cwd)).toEqual([]);
     expect(await checkIntegrity(legacy.cwd)).toEqual([]);
 
@@ -387,6 +390,66 @@ describe("SDD remediation transitions", { timeout: 120_000 }, () => {
     await legacy.git.run(["add", ".ways/sdd/failing/review.md"]);
     await legacy.git.run(["commit", "-q", "--no-verify", "--amend", "--no-edit"]);
     expect((await checkHistory(legacy.cwd)).map((issue) => issue.code)).toContain("history-prior-artifact-mutated");
+  });
+
+  it("rejects forged legacy validation failure strings in remediation, consistency, history, and integrity", async () => {
+    const legacy = await legacyValidationTransition();
+    const recordPath = remediationRecordPath("failing", 1);
+    const record = JSON.parse(await readFile(join(legacy.cwd, recordPath), "utf8"));
+    record.evidence.failures[0].detail = "Configured test command exited with status 8";
+    const validatePath = attemptPhasePath("failing", 0, "validate");
+    const validate = await readFile(join(legacy.cwd, validatePath), "utf8");
+    await writeFile(join(legacy.cwd, recordPath), `${JSON.stringify(record, null, 2)}\n`);
+    await writeFile(join(legacy.cwd, validatePath), validate.replace(/Failure-Digest:.+/, `Failure-Digest: ${failureEvidenceDigest(record.evidence)}`));
+    const state = (await loadState(legacy.cwd))!;
+    state.remediation!.evidence = record.evidence;
+    await saveState(legacy.cwd, state);
+    await legacy.git.run(["add", recordPath, validatePath, ".ways/state/current.json", ".ways/status.json"]);
+    await legacy.git.run(["commit", "-q", "--no-verify", "--amend", "--no-edit"]);
+
+    expect(await remediationEvidenceFailure(legacy.git, record, legacy.prior, await legacy.git.head())).toMatch(/cannot be reproduced/);
+    await expect(assertSddConsistency(legacy.cwd, (await loadState(legacy.cwd))!)).rejects.toThrow(/cannot be reproduced/);
+    expect((await checkHistory(legacy.cwd)).map((issue) => issue.code)).toContain("history-invalid-remediation-evidence");
+    expect((await checkIntegrity(legacy.cwd)).map((issue) => issue.code)).toContain("state-git-divergence");
+  });
+
+  it.each(["missing", "mismatched", "duplicate"] as const)("rejects %s legacy Failure-Digest in remediation, consistency, history, and integrity", async (kind) => {
+    const legacy = await legacyValidationTransition();
+    const validatePath = attemptPhasePath("failing", 0, "validate");
+    const validate = await readFile(join(legacy.cwd, validatePath), "utf8");
+    const evidenceDigest = failureEvidenceDigest(JSON.parse(await readFile(join(legacy.cwd, remediationRecordPath("failing", 1)), "utf8")).evidence);
+    await writeFile(join(legacy.cwd, validatePath), kind === "missing"
+      ? validate.replace(/^Failure-Digest:.*\n/m, "")
+      : kind === "mismatched"
+        ? validate.replace(/Failure-Digest:.+/, `Failure-Digest: ${"0".repeat(64)}`)
+        : `${validate.trimEnd()}\nFailure-Digest: ${evidenceDigest}\n`);
+    await legacy.git.run(["add", validatePath]);
+    await legacy.git.run(["commit", "-q", "--no-verify", "--amend", "--no-edit"]);
+    const record = JSON.parse(await readFile(join(legacy.cwd, remediationRecordPath("failing", 1)), "utf8"));
+
+    expect(await remediationEvidenceFailure(legacy.git, record, legacy.prior, await legacy.git.head())).toMatch(/not bound/);
+    await expect(assertSddConsistency(legacy.cwd, (await loadState(legacy.cwd))!)).rejects.toThrow(/not bound/);
+    expect((await checkHistory(legacy.cwd)).map((issue) => issue.code)).toContain("history-invalid-remediation-evidence");
+    expect((await checkIntegrity(legacy.cwd)).map((issue) => issue.code)).toContain("state-git-divergence");
+  });
+
+  it("rejects legacy validation remediation not bound to its direct parent input", async () => {
+    const legacy = await legacyValidationTransition();
+    const recordPath = remediationRecordPath("failing", 1);
+    const record = JSON.parse(await readFile(join(legacy.cwd, recordPath), "utf8"));
+    record.priorCheckpoint = await legacy.git.parent(legacy.prior);
+    await writeFile(join(legacy.cwd, recordPath), `${JSON.stringify(record, null, 2)}\n`);
+    const state = (await loadState(legacy.cwd))!;
+    state.remediation!.priorCheckpoint = record.priorCheckpoint;
+    state.gateCommit = record.priorCheckpoint;
+    await saveState(legacy.cwd, state);
+    await legacy.git.run(["add", recordPath, ".ways/state/current.json", ".ways/status.json"]);
+    await legacy.git.run(["commit", "-q", "--no-verify", "--amend", "--no-edit"]);
+
+    expect(await remediationEvidenceFailure(legacy.git, record, legacy.prior, await legacy.git.head())).toMatch(/does not bind/);
+    await expect(assertSddConsistency(legacy.cwd, (await loadState(legacy.cwd))!)).rejects.toThrow(/transition identity does not match/);
+    expect((await checkHistory(legacy.cwd)).map((issue) => issue.code)).toContain("history-invalid-remediation-evidence");
+    expect((await checkIntegrity(legacy.cwd)).map((issue) => issue.code)).toContain("state-git-divergence");
   });
 
   it("does not exempt prior validation artifacts from recorded-validation remediation", async () => {
