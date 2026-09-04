@@ -14,7 +14,7 @@ import { approveInteractively } from "../src/work/approve.js";
 import { attemptPhasePath, attemptReviewPath, remediationRecordPath, validationFailureRecordPath } from "../src/work/attempt.js";
 import { reviewDigest, submitReview } from "../src/work/review.js";
 import { remediateSdd } from "../src/work/remediation.js";
-import { recordValidationFailure } from "../src/work/validation-failure.js";
+import { recordValidationFailure, validationFailureDigest } from "../src/work/validation-failure.js";
 import { advanceSdd } from "../src/work/sdd.js";
 
 const targets: RemediationTarget[] = ["implement", "decompose", "plan", "specify"];
@@ -245,11 +245,99 @@ describe("SDD remediation transitions", { timeout: 120_000 }, () => {
     expect(await git.head()).not.toBe(prior);
   });
 
-  it("accepts a correctly staged validation failure record in the commit hook", async () => {
+  it("replays staged failure results in the hook and history instead of accepting self-attestation", async () => {
     const { cwd, git } = await validateRepository();
+    const path = validationFailureRecordPath("failing", 0);
     await git.run(["reset", "--soft", "HEAD^"]);
-    const verdict = await judgeCommitMessage(cwd, "record validation failure\n\nHarness-Work: failing\nHarness-Phase: validate\nHarness-State: validation-failed");
-    expect(verdict).toMatchObject({ accepted: true });
+    const forged = JSON.parse(await readFile(join(cwd, path), "utf8"));
+    forged.checks.testExitCode = 8;
+    forged.digest = validationFailureDigest({ ...forged, digest: undefined });
+    await writeFile(join(cwd, path), `${JSON.stringify(forged, null, 2)}\n`);
+    await git.run(["add", path]);
+    const message = "record validation failure\n\nHarness-Work: failing\nHarness-Phase: validate\nHarness-State: validation-failed";
+    expect(await judgeCommitMessage(cwd, message)).toMatchObject({ accepted: false, reason: expect.stringMatching(/cannot be reproduced/) });
+    await git.run(["commit", "-q", "--no-verify", "-m", "record validation failure", "-m", "Harness-Work: failing\nHarness-Phase: validate\nHarness-State: validation-failed"]);
+    expect((await checkHistory(cwd)).map((issue) => issue.code)).toContain("history-invalid-validation-failure");
+  });
+
+  it("rejects wrong validation inputs, extra paths, and malformed failure trailers", async () => {
+    const wrongInput = await validateRepository();
+    const path = validationFailureRecordPath("failing", 0);
+    const record = JSON.parse(await readFile(join(wrongInput.cwd, path), "utf8"));
+    record.inputTree = "0".repeat(40);
+    record.digest = validationFailureDigest({ ...record, digest: undefined });
+    await writeFile(join(wrongInput.cwd, path), `${JSON.stringify(record, null, 2)}\n`);
+    await wrongInput.git.run(["add", path]);
+    await wrongInput.git.run(["commit", "-q", "--no-verify", "--amend", "--no-edit"]);
+    expect((await checkHistory(wrongInput.cwd)).map((issue) => issue.code)).toContain("history-invalid-validation-failure");
+
+    const wrongCommit = await validateRepository();
+    const wrongCommitRecord = JSON.parse(await readFile(join(wrongCommit.cwd, path), "utf8"));
+    wrongCommitRecord.inputCommit = await wrongCommit.git.parent(wrongCommitRecord.inputCommit);
+    wrongCommitRecord.digest = validationFailureDigest({ ...wrongCommitRecord, digest: undefined });
+    await wrongCommit.git.run(["reset", "--soft", "HEAD^"]);
+    await writeFile(join(wrongCommit.cwd, path), `${JSON.stringify(wrongCommitRecord, null, 2)}\n`);
+    await wrongCommit.git.run(["add", path]);
+    expect(await judgeCommitMessage(wrongCommit.cwd, "record validation failure\n\nHarness-Work: failing\nHarness-Phase: validate\nHarness-State: validation-failed")).toMatchObject({ accepted: false, reason: expect.stringMatching(/does not bind/) });
+    await wrongCommit.git.run(["commit", "-q", "--no-verify", "-m", "record validation failure", "-m", "Harness-Work: failing\nHarness-Phase: validate\nHarness-State: validation-failed"]);
+    expect((await checkHistory(wrongCommit.cwd)).map((issue) => issue.code)).toContain("history-invalid-validation-failure");
+
+    const extraPath = await validateRepository();
+    await extraPath.git.run(["reset", "--soft", "HEAD^"]);
+    await writeFile(join(extraPath.cwd, "extra.txt"), "not validation evidence\n");
+    await extraPath.git.run(["add", "extra.txt"]);
+    expect(await judgeCommitMessage(extraPath.cwd, "record validation failure\n\nHarness-Work: failing\nHarness-Phase: validate\nHarness-State: validation-failed")).toMatchObject({ accepted: false, reason: expect.stringMatching(/stage only/) });
+    await extraPath.git.run(["commit", "-q", "--no-verify", "-m", "record validation failure", "-m", "Harness-Work: failing\nHarness-Phase: validate\nHarness-State: validation-failed"]);
+    expect((await checkHistory(extraPath.cwd)).map((issue) => issue.code)).toContain("history-invalid-validation-failure");
+
+    const trailers = await validateRepository();
+    expect(await judgeCommitMessage(trailers.cwd, "record validation failure\n\nHarness-Work: failing\nHarness-Phase: review\nHarness-State: validation-failed")).toMatchObject({ accepted: false, reason: expect.stringMatching(/trailers/) });
+    await trailers.git.run(["commit", "-q", "--no-verify", "--amend", "-m", "record validation failure", "-m", "Harness-Work: failing\nHarness-Phase: review\nHarness-State: validation-failed"]);
+    expect((await checkHistory(trailers.cwd)).map((issue) => issue.code)).toContain("history-invalid-validation-failure");
+  });
+
+  it("rejects remediation validation evidence that does not link its parent failure commit", async () => {
+    const { cwd, git, prior } = await validateRepository();
+    await remediateSdd(cwd, "implement", "link failure");
+    const path = remediationRecordPath("failing", 1);
+    const record = JSON.parse(await readFile(join(cwd, path), "utf8"));
+    record.evidence.failureRecord.commit = await git.parent(prior);
+    record.evidence.failureRecord.tree = await git.run(["rev-parse", `${record.evidence.failureRecord.commit}^{tree}`]);
+    await writeFile(join(cwd, path), `${JSON.stringify(record, null, 2)}\n`);
+    await git.run(["add", path]);
+    await git.run(["commit", "-q", "--no-verify", "--amend", "--no-edit"]);
+    expect((await checkHistory(cwd)).map((issue) => issue.code)).toContain("history-invalid-remediation-evidence");
+  });
+
+  it("replays supported legacy remediated transitions from their committed record", async () => {
+    const { cwd, git, prior, reviewPath } = await reviewRepository();
+    const state = (await loadState(cwd))!;
+    const review = JSON.parse(await readFile(join(cwd, reviewPath), "utf8"));
+    const timestamp = new Date().toISOString();
+    const record = {
+      schemaVersion: 1,
+      workId: "failing",
+      source: "review" as const,
+      target: "implement" as const,
+      reason: "legacy remediation",
+      evidence: { kind: "review" as const, review },
+      priorCheckpoint: prior,
+      attempt: 1,
+      timestamp,
+    };
+    await mkdir(join(cwd, remediationRecordPath("failing", 1), ".."), { recursive: true });
+    await writeFile(join(cwd, remediationRecordPath("failing", 1)), `${JSON.stringify(record, null, 2)}\n`);
+    await writeFile(join(cwd, attemptPhasePath("failing", 1, "implement")), "# implement\n\nGoal:\nEvidence:\nDecision:\nGate:\n");
+    const { schemaVersion: _schemaVersion, workId: _workId, ...metadata } = record;
+    const reopened: WorkState = {
+      ...state, phase: "implement", gateCommit: prior, attempt: 1,
+      remediation: metadata, updatedAt: timestamp,
+    };
+    delete reopened.lastCompletedPhase;
+    await saveState(cwd, reopened);
+    await git.commit(await git.changedPaths(), "legacy remediation", { work: "failing", state: "remediated", attempt: "1" });
+    expect(await checkHistory(cwd)).toEqual([]);
+    expect(await checkIntegrity(cwd)).toEqual([]);
   });
 
   it("records failed checks through the CLI and preserves the passing validate path", async () => {

@@ -137,6 +137,30 @@ export function auditCommits(commits: readonly CommitInfo[], activeId?: string):
   return replayCommits(commits, activeId).issues;
 }
 
+/**
+ * v1 remediation commits used Harness-State: remediated and put source/target
+ * only in their committed record.  Hydrate that record before ordered replay;
+ * new commits are deliberately required to carry the explicit trailers.
+ */
+async function hydrateLegacyRemediations(git: GitRepository, commits: readonly CommitInfo[]): Promise<CommitInfo[]> {
+  return Promise.all(commits.map(async (commit) => {
+    if (commit.trailers.state !== "remediated" || !commit.trailers.work) return commit;
+    const attempt = parsedAttempt(commit.trailers.attempt);
+    if (attempt === undefined || attempt === 0) return commit;
+    try {
+      const path = remediationRecordPath(commit.trailers.work, attempt);
+      const value: unknown = JSON.parse(await git.run(["show", `${commit.hash}:${path}`]));
+      if (!validateRemediation(value) || value.workId !== commit.trailers.work || value.attempt !== attempt) return commit;
+      return {
+        ...commit,
+        trailers: { ...commit.trailers, phase: value.source, state: `remediated-${value.target}` },
+      };
+    } catch {
+      return commit;
+    }
+  }));
+}
+
 async function remediationEvidenceIssues(git: GitRepository, checkpoints: readonly HistoryCheckpoint[]): Promise<IntegrityIssue[]> {
   const issues: IntegrityIssue[] = [];
   for (const checkpoint of checkpoints) {
@@ -210,12 +234,13 @@ async function priorArtifactMutationIssues(git: GitRepository, commits: readonly
 }
 
 export async function auditHistory(git: GitRepository, commits: readonly CommitInfo[], activeId?: string): Promise<{ issues: IntegrityIssue[]; checkpoints: HistoryCheckpoint[] }> {
-  const replayed = replayCommits(commits, activeId);
+  const replayCommitsInput = await hydrateLegacyRemediations(git, commits);
+  const replayed = replayCommits(replayCommitsInput, activeId);
   return { ...replayed, issues: [
     ...replayed.issues,
     ...await remediationEvidenceIssues(git, replayed.checkpoints),
     ...await validationFailureIssues(git, commits),
-    ...await priorArtifactMutationIssues(git, commits),
+    ...await priorArtifactMutationIssues(git, replayCommitsInput),
   ] };
 }
 

@@ -62,8 +62,9 @@ export async function assertSddConsistency(cwd: string, state: WorkState): Promi
     }
     const transitionHash = await remediationTransitionCommit(git, state.id, remediation, head);
     const transition = await git.commitInfo(transitionHash);
-    if (transition.trailers.work !== state.id || transition.trailers.phase !== remediation.source
-      || transition.trailers.state !== `remediated-${remediation.target}` || transition.trailers.attempt !== String(attempt)
+    const legacyTransition = transition.trailers.state === "remediated";
+    if (transition.trailers.work !== state.id || (!legacyTransition && (transition.trailers.phase !== remediation.source
+      || transition.trailers.state !== `remediated-${remediation.target}`)) || transition.trailers.attempt !== String(attempt)
       || await git.parent(transitionHash) !== remediation.priorCheckpoint || state.gateCommit !== remediation.priorCheckpoint) {
       throw new Error("Remediation transition does not match active state; run ways repair");
     }

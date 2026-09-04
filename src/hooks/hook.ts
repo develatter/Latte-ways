@@ -7,7 +7,7 @@ import { loadState } from "../state/store.js";
 import { approvalBinds, approvalPath, requiresApproval } from "../work/approve.js";
 import { attemptNumber, attemptPhasePath, attemptReviewPath, isPriorAttemptArtifact, remediationRecordPath, validationFailureRecordPath } from "../work/attempt.js";
 import { remediationEvidenceFailure } from "../work/remediation.js";
-import { validationFailureRecordFailure } from "../work/validation-failure.js";
+import { validationFailureRecordFailure, validationFailureReplayFailure } from "../work/validation-failure.js";
 import { committedMismatch } from "../work/sdd.js";
 
 export interface HookVerdict {
@@ -155,6 +155,8 @@ export async function judgeCommitMessage(cwd: string, message: string): Promise<
             || value.inputTree !== await git.run(["rev-parse", "HEAD^{tree}"])) {
             return { accepted: false, reason: "Validation failure record does not bind the current committed input" };
           }
+          const replayFailure = await validationFailureReplayFailure(git, value);
+          if (replayFailure) return { accepted: false, reason: replayFailure };
         } catch {
           return { accepted: false, reason: "Validation failure record is unreadable" };
         }
