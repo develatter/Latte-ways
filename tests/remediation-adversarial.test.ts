@@ -1,14 +1,16 @@
-import { mkdtemp, readFile, writeFile } from "node:fs/promises";
+import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 import { bootstrap } from "../src/bootstrap/bootstrap.js";
 import { run } from "../src/cli.js";
 import { GitRepository } from "../src/git/git.js";
+import { judgeCommitMessage } from "../src/hooks/hook.js";
 import { checkHistory } from "../src/integrity/history.js";
+import { checkIntegrity } from "../src/integrity/integrity.js";
 import { readStatus } from "../src/state/status.js";
 import { loadState } from "../src/state/store.js";
-import { attemptPhasePath, attemptReviewPath } from "../src/work/attempt.js";
+import { attemptPhasePath, attemptReviewPath, remediationRecordPath } from "../src/work/attempt.js";
 import { implementationCycleBaseline, workDigest } from "../src/work/digest.js";
 import { remediateSdd } from "../src/work/remediation.js";
 import { reviewDigest } from "../src/work/review.js";
@@ -95,10 +97,45 @@ describe("adversarial remediation lifecycle", { timeout: 120_000 }, () => {
     await git.run(["reset", "--", implementPath]);
     await writeFile(implementPath, certifiedImplement);
 
-    await remediateSdd(cwd, "implement", "repair the independent finding");
+    const transition = await remediateSdd(cwd, "implement", "repair the independent finding");
     expect(await git.run(["show", `${prior}:${attemptPhasePath(id, 0, "implement")}`])).toBe(certifiedImplement.trim());
     expect(await readFile(join(cwd, attemptPhasePath(id, 0, "implement")), "utf8")).toBe(certifiedImplement);
     expect((await loadState(cwd))?.remediation).toMatchObject({ source: "review", target: "implement", attempt: 1 });
+
+    const recordPath = remediationRecordPath(id, 1);
+    const originalRecord = await readFile(join(cwd, recordPath), "utf8");
+    const immutableArtifacts = [
+      attemptPhasePath(id, 0, "implement"),
+      attemptReviewPath(id, 0),
+      `.ways/sdd/${id}/approvals/plan.json`,
+      recordPath,
+    ];
+    for (const artifact of immutableArtifacts) {
+      await mkdir(join(cwd, artifact, ".."), { recursive: true });
+      await writeFile(join(cwd, artifact), "forged replacement\n");
+      await git.run(["add", "--", artifact]);
+      const verdict = await judgeCommitMessage(cwd, `forge immutable artifact\n\nHarness-Work: ${id}\nHarness-Task: remediation-fix\nHarness-Attempt: 1`);
+      expect(verdict).toMatchObject({ accepted: false, reason: expect.stringContaining("prior SDD artifact is immutable") });
+      expect((await checkIntegrity(cwd)).map((issue) => issue.code)).toContain("prior-artifact-mutated");
+      await git.run(["reset", "--", artifact]);
+      if (artifact === `.ways/sdd/${id}/approvals/plan.json`) await rm(join(cwd, artifact));
+      else await git.run(["checkout", "--", artifact]);
+    }
+
+    const oldImplement = attemptPhasePath(id, 0, "implement");
+    await writeFile(join(cwd, oldImplement), "forged historical mutation\n");
+    await git.run(["add", "--", oldImplement]);
+    await git.run(["commit", "-q", "--no-verify", "-m", "forge immutable artifact", "-m", `Harness-Work: ${id}\nHarness-Task: remediation-fix\nHarness-Attempt: 1`]);
+    expect((await checkHistory(cwd)).map((issue) => issue.code)).toContain("history-prior-artifact-mutated");
+
+    await rm(join(cwd, recordPath));
+    await git.run(["add", "-u", "--", recordPath]);
+    await git.run(["commit", "-q", "--no-verify", "-m", "delete remediation record", "-m", `Harness-Work: ${id}\nHarness-Task: remediation-fix\nHarness-Attempt: 1`]);
+    await writeFile(join(cwd, recordPath), originalRecord);
+    await git.run(["add", "--", recordPath]);
+    await git.run(["commit", "-q", "--no-verify", "-m", "readd remediation record", "-m", `Harness-Work: ${id}\nHarness-Task: remediation-fix\nHarness-Attempt: 1`]);
+    expect(await implementationCycleBaseline(cwd, (await loadState(cwd))!)).toBe(transition);
+    expect((await checkHistory(cwd)).map((issue) => issue.code)).toContain("history-prior-artifact-mutated");
   });
 
   it("requires newly integrated delegated remediation work and binds the digest to both initial implementation commits", async () => {

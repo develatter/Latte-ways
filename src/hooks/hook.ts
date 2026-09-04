@@ -5,7 +5,8 @@ import { validateApproval, validateRemediation, validateState } from "../domain/
 import { GitRepository, parseTrailers } from "../git/git.js";
 import { loadState } from "../state/store.js";
 import { approvalBinds, approvalPath, requiresApproval } from "../work/approve.js";
-import { attemptNumber, remediationRecordPath } from "../work/attempt.js";
+import { attemptNumber, attemptPhasePath, attemptReviewPath, isPriorAttemptArtifact, remediationRecordPath } from "../work/attempt.js";
+import { remediationEvidenceFailure } from "../work/remediation.js";
 import { committedMismatch } from "../work/sdd.js";
 
 export interface HookVerdict {
@@ -89,7 +90,27 @@ async function stagedRemediationFailure(git: GitRepository, active: WorkState, c
     || record.reason !== remediation.reason || record.timestamp !== remediation.timestamp) {
     return `must stage matching remediation evidence at ${path}`;
   }
-  return undefined;
+  const tree = await git.run(["write-tree"]);
+  return remediationEvidenceFailure(git, record, await git.head(), tree);
+}
+
+async function stagedPriorArtifactFailure(git: GitRepository, active: WorkState, allowed: ReadonlySet<string> = new Set()): Promise<string | undefined> {
+  const attempt = attemptNumber(active.attempt);
+  if (attempt === 0) return undefined;
+  const changed = (await git.run(["diff", "--cached", "--name-only", "HEAD"])).split("\n").filter(Boolean);
+  const protectedPath = changed.find((path) => !allowed.has(path) && isPriorAttemptArtifact(path, active.id, attempt));
+  return protectedPath ? `prior SDD artifact is immutable: ${protectedPath}` : undefined;
+}
+
+function remediationTransitionArtifacts(active: WorkState): Set<string> {
+  const remediation = active.remediation!;
+  const sourceAttempt = attemptNumber(active.attempt) - 1;
+  const allowed = new Set([
+    remediationRecordPath(active.id, attemptNumber(active.attempt)),
+    attemptPhasePath(active.id, sourceAttempt, remediation.source),
+  ]);
+  if (remediation.source === "review") allowed.add(attemptReviewPath(active.id, sourceAttempt));
+  return allowed;
 }
 
 async function headHasManifest(git: GitRepository): Promise<boolean> {
@@ -122,6 +143,11 @@ export async function judgeCommitMessage(cwd: string, message: string): Promise<
         }
         const failure = await stagedRemediationFailure(git, active, committed);
         if (failure) return { accepted: false, reason: `Remediation of ${active.id}: ${failure}` };
+        const immutable = await stagedPriorArtifactFailure(git, active, remediationTransitionArtifacts(active));
+        if (immutable) return { accepted: false, reason: immutable };
+      } else {
+        const failure = await stagedPriorArtifactFailure(git, active);
+        if (failure) return { accepted: false, reason: failure };
       }
       const certified = active.lastCompletedPhase;
       const certifying = trailers.state === "completed" && certified !== undefined && trailers.phase === certified;

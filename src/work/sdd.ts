@@ -9,7 +9,7 @@ import { writeAtomic } from "../fs/files.js";
 import { GitRepository } from "../git/git.js";
 import { loadState, removeState, saveState } from "../state/store.js";
 import { approvalPath, assertApproved, requiresApproval } from "./approve.js";
-import { attemptNumber, attemptPhasePath, remediationRecordPath } from "./attempt.js";
+import { attemptNumber, attemptPhasePath, remediationTransitionCommit } from "./attempt.js";
 import { assertReviewPassed } from "./review.js";
 import { assertDelegatedCertificationTree, assertDelegatedImplementation } from "./tasks.js";
 
@@ -59,9 +59,7 @@ export async function assertSddConsistency(cwd: string, state: WorkState): Promi
     if (!remediation || remediation.attempt !== attempt || state.phase !== remediation.target) {
       throw new Error("Remediation state does not identify its reopened phase; run ways repair");
     }
-    const recordPath = remediationRecordPath(state.id, attempt);
-    const transitionHash = await git.run(["log", "--diff-filter=A", "-1", "--format=%H", "--", recordPath]);
-    if (!transitionHash || !await git.isAncestor(transitionHash, head)) throw new Error("Remediation transition is not committed at HEAD; run ways repair");
+    const transitionHash = await remediationTransitionCommit(git, state.id, remediation, head);
     const transition = await git.commitInfo(transitionHash);
     if (transition.trailers.work !== state.id || transition.trailers.phase !== remediation.source
       || transition.trailers.state !== `remediated-${remediation.target}` || transition.trailers.attempt !== String(attempt)

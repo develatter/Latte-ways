@@ -6,7 +6,7 @@ import { stableJson, writeAtomic } from "../fs/files.js";
 import { GitRepository } from "../git/git.js";
 import { commitsAfter } from "../integrity/history.js";
 import { loadState, saveState } from "../state/store.js";
-import { attemptNumber, attemptPhasePath } from "./attempt.js";
+import { attemptNumber, attemptPhasePath, remediationTransitionCommit } from "./attempt.js";
 
 function requireSdd(state: WorkState | undefined): WorkState {
   if (!state || state.mode !== "sdd") throw new Error("No active SDD work");
@@ -128,14 +128,11 @@ async function remediationTransitionAnchor(git: GitRepository, state: WorkState)
   const remediation = state.remediation;
   const attempt = attemptNumber(state.attempt);
   if (!remediation || remediation.attempt !== attempt || attempt === 0) throw new Error("Remediated delegated execution lacks current attempt metadata");
-  const commits = await commitsAfter(git, remediation.priorCheckpoint);
-  const transition = commits.find((commit) => commit.trailers.work === state.id
-    && commit.trailers.attempt === String(attempt)
-    && commit.trailers.state === `remediated-${remediation.target}`);
-  if (!transition || await git.parent(transition.hash) !== remediation.priorCheckpoint) {
+  try {
+    return await remediationTransitionCommit(git, state.id, remediation);
+  } catch {
     throw new Error("Remediation transition is missing or does not follow its prior checkpoint");
   }
-  return transition.hash;
 }
 
 export async function assertDelegatedCertificationTree(cwd: string, state: WorkState): Promise<void> {

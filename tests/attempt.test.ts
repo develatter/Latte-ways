@@ -5,6 +5,7 @@ import {
   attemptArtifactPath,
   attemptPhasePath,
   attemptReviewPath,
+  isPriorAttemptArtifact,
   remediationRecordPath,
 } from "../src/work/attempt.js";
 
@@ -20,6 +21,16 @@ describe("attempt-scoped SDD artifact paths", () => {
     expect(attemptPhasePath("auth-refresh", 2, "implement")).toBe(".ways/sdd/auth-refresh/attempts/2/implement.md");
     expect(attemptReviewPath("auth-refresh", 2)).toBe(".ways/sdd/auth-refresh/attempts/2/reviews/latest.json");
     expect(remediationRecordPath("auth-refresh", 2)).toBe(".ways/sdd/auth-refresh/attempts/2/remediation.json");
+  });
+
+  it("protects every prior attempt evidence category while allowing active phase work", () => {
+    for (const path of [
+      ".ways/sdd/auth-refresh/implement.md",
+      ".ways/sdd/auth-refresh/reviews/latest.json",
+      ".ways/sdd/auth-refresh/approvals/plan.json",
+      ".ways/sdd/auth-refresh/attempts/1/remediation.json",
+    ]) expect(isPriorAttemptArtifact(path, "auth-refresh", 2)).toBe(true);
+    expect(isPriorAttemptArtifact(".ways/sdd/auth-refresh/attempts/2/implement.md", "auth-refresh", 2)).toBe(false);
   });
 
   it("rejects invalid work ids, attempts, and path segments", () => {

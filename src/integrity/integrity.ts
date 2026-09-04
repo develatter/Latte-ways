@@ -10,7 +10,8 @@ import { GitRepository } from "../git/git.js";
 import { providerById } from "../adapters/install.js";
 import { readStatus, statusMatches } from "../state/status.js";
 import { commitsAfter } from "./history.js";
-import { remediationRecordPath } from "../work/attempt.js";
+import { isPriorAttemptArtifact, remediationRecordPath, remediationTransitionCommit } from "../work/attempt.js";
+import { remediationEvidenceFailure } from "../work/remediation.js";
 import { assertSddConsistency } from "../work/sdd.js";
 
 export interface IntegrityIssue {
@@ -106,7 +107,7 @@ export async function checkIntegrity(cwd: string): Promise<IntegrityIssue[]> {
         await assertSddConsistency(cwd, activeState);
         if (activeState.remediation && activeState.attempt) {
           const path = remediationRecordPath(activeState.id, activeState.attempt);
-          const transition = await git.run(["log", "--diff-filter=A", "-1", "--format=%H", "--", path]);
+          const transition = await remediationTransitionCommit(git, activeState.id, activeState.remediation, head);
           const value: unknown = JSON.parse(await git.run(["show", `${transition}:${path}`]));
           if (!validateRemediation(value) || value.workId !== activeState.id || value.attempt !== activeState.attempt
             || value.source !== activeState.remediation.source || value.target !== activeState.remediation.target
@@ -114,6 +115,17 @@ export async function checkIntegrity(cwd: string): Promise<IntegrityIssue[]> {
             || value.timestamp !== activeState.remediation.timestamp
             || JSON.stringify(value.evidence) !== JSON.stringify(activeState.remediation.evidence)) {
             throw new Error("Active remediation evidence does not match state");
+          }
+          const evidenceFailure = await remediationEvidenceFailure(git, value, activeState.remediation.priorCheckpoint, transition);
+          if (evidenceFailure) throw new Error(evidenceFailure);
+          const changed = new Set([
+            ...(await git.run(["diff", "--name-only"])).split("\n"),
+            ...(await git.run(["diff", "--cached", "--name-only"])).split("\n"),
+            ...(await git.run(["ls-files", "--others", "--exclude-standard"])).split("\n"),
+          ].filter(Boolean));
+          const priorMutation = [...changed].find((candidate) => isPriorAttemptArtifact(candidate, activeState.id, activeState.attempt!));
+          if (priorMutation) {
+            issues.push({ code: "prior-artifact-mutated", path: priorMutation, message: "Prior SDD attempt artifacts are immutable" });
           }
         }
       } else if (activeState.mode === "quick") {

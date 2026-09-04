@@ -4,7 +4,8 @@ import { validateRemediation } from "../domain/validation.js";
 import { loadConfig } from "../config/config.js";
 import { GitRepository, type CommitInfo } from "../git/git.js";
 import { loadState } from "../state/store.js";
-import { remediationRecordPath } from "../work/attempt.js";
+import { attemptPhasePath, attemptReviewPath, isPriorAttemptArtifact, remediationRecordPath } from "../work/attempt.js";
+import { remediationEvidenceFailure } from "../work/remediation.js";
 import type { IntegrityIssue } from "./integrity.js";
 
 export interface HistoryOptions {
@@ -147,17 +148,49 @@ async function remediationEvidenceIssues(git: GitRepository, checkpoints: readon
     } catch {
       // A transition cannot be a root commit.
     }
-    if (!record || record.workId !== checkpoint.work || record.source !== checkpoint.phase || record.target !== checkpoint.target
+    if (!record || !parent || record.workId !== checkpoint.work || record.source !== checkpoint.phase || record.target !== checkpoint.target
       || record.attempt !== checkpoint.attempt || record.priorCheckpoint !== parent) {
       issue(issues, checkpoint.commit, "history-invalid-remediation-evidence", `Remediation attempt ${checkpoint.attempt} for ${checkpoint.work} lacks matching transition evidence at ${path}`);
+      continue;
     }
+    try {
+      const failure = await remediationEvidenceFailure(git, record, parent, checkpoint.commit.hash);
+      if (failure) issue(issues, checkpoint.commit, "history-invalid-remediation-evidence", failure);
+    } catch {
+      issue(issues, checkpoint.commit, "history-invalid-remediation-evidence", `Remediation attempt ${checkpoint.attempt} evidence cannot be bound to its transition tree`);
+    }
+  }
+  return issues;
+}
+
+async function priorArtifactMutationIssues(git: GitRepository, commits: readonly CommitInfo[]): Promise<IntegrityIssue[]> {
+  const issues: IntegrityIssue[] = [];
+  for (const commit of commits) {
+    const { work, phase, state } = commit.trailers;
+    const attempt = parsedAttempt(commit.trailers.attempt);
+    if (!work || attempt === undefined || attempt === 0 || state === "cancelled"
+      || (state === "completed" && phase === "close")) continue;
+    const allowed = new Set<string>();
+    if (state?.startsWith("remediated-") && (phase === "review" || phase === "validate")) {
+      const sourceAttempt = attempt - 1;
+      allowed.add(remediationRecordPath(work, attempt));
+      allowed.add(attemptPhasePath(work, sourceAttempt, phase));
+      if (phase === "review") allowed.add(attemptReviewPath(work, sourceAttempt));
+    }
+    const changed = (await git.run(["diff-tree", "--no-commit-id", "--name-only", "-r", commit.hash])).split("\n").filter(Boolean);
+    const protectedPath = changed.find((path) => !allowed.has(path) && isPriorAttemptArtifact(path, work, attempt));
+    if (protectedPath) issue(issues, commit, "history-prior-artifact-mutated", `Prior SDD artifact was modified during attempt ${attempt}: ${protectedPath}`);
   }
   return issues;
 }
 
 export async function auditHistory(git: GitRepository, commits: readonly CommitInfo[], activeId?: string): Promise<{ issues: IntegrityIssue[]; checkpoints: HistoryCheckpoint[] }> {
   const replayed = replayCommits(commits, activeId);
-  return { ...replayed, issues: [...replayed.issues, ...await remediationEvidenceIssues(git, replayed.checkpoints)] };
+  return { ...replayed, issues: [
+    ...replayed.issues,
+    ...await remediationEvidenceIssues(git, replayed.checkpoints),
+    ...await priorArtifactMutationIssues(git, commits),
+  ] };
 }
 
 export async function checkHistory(cwd: string, options: HistoryOptions = {}): Promise<IntegrityIssue[]> {

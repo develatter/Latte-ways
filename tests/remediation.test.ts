@@ -4,8 +4,11 @@ import { join } from "node:path";
 import { describe, expect, it, vi } from "vitest";
 import { bootstrap } from "../src/bootstrap/bootstrap.js";
 import { run } from "../src/cli.js";
-import type { RemediationTarget, WorkState } from "../src/domain/types.js";
+import type { RemediationEvidence, RemediationTarget, WorkState } from "../src/domain/types.js";
 import { GitRepository } from "../src/git/git.js";
+import { judgeCommitMessage } from "../src/hooks/hook.js";
+import { checkHistory } from "../src/integrity/history.js";
+import { checkIntegrity } from "../src/integrity/integrity.js";
 import { loadState, saveState } from "../src/state/store.js";
 import { approveInteractively } from "../src/work/approve.js";
 import { attemptPhasePath, attemptReviewPath, remediationRecordPath } from "../src/work/attempt.js";
@@ -31,11 +34,20 @@ async function baseRepository(testExit = 0): Promise<{ cwd: string; git: GitRepo
   return { cwd, git, base: await git.head() };
 }
 
+async function completeThroughDecompose(cwd: string, git: GitRepository): Promise<string> {
+  await mkdir(join(cwd, ".ways/sdd/failing"), { recursive: true });
+  let checkpoint = "";
+  for (const phase of ["intake", "explore", "assess", "specify", "plan", "decompose"] as const) {
+    const path = `.ways/sdd/failing/${phase}.md`;
+    await writeFile(join(cwd, path), `# ${phase}\n\nGoal: complete\nEvidence: test\nDecision: pass\nGate: advance\n`);
+    checkpoint = await git.commit([path], phase, { work: "failing", phase, state: "completed" });
+  }
+  return checkpoint;
+}
+
 async function reviewRepository(profile: "autonomous" | "supervised" = "autonomous"): Promise<{ cwd: string; git: GitRepository; reviewPath: string; prior: string }> {
   const { cwd, git, base } = await baseRepository();
-  await mkdir(join(cwd, ".ways/sdd/failing"), { recursive: true });
-  await writeFile(join(cwd, ".ways/sdd/failing/decompose.md"), "# decompose\n\nGoal: split\nEvidence: tasks\n");
-  const decompose = await git.commit([".ways/sdd/failing/decompose.md"], "decompose", { work: "failing", phase: "decompose", state: "completed" });
+  const decompose = await completeThroughDecompose(cwd, git);
   await writeFile(join(cwd, "implementation.ts"), "export const value = 1;\n");
   const now = new Date().toISOString();
   const state: WorkState = {
@@ -58,7 +70,7 @@ async function reviewRepository(profile: "autonomous" | "supervised" = "autonomo
 
 async function validateRepository(testExit = 7): Promise<{ cwd: string; git: GitRepository; prior: string }> {
   const { cwd, git, base } = await baseRepository(testExit);
-  await mkdir(join(cwd, ".ways/sdd/failing"), { recursive: true });
+  await completeThroughDecompose(cwd, git);
   await writeFile(join(cwd, ".ways/sdd/failing/review.md"), "# review\n\nGoal: inspect\nEvidence: pass\n");
   await writeFile(join(cwd, "implementation.ts"), "export const value = 1;\n");
   const reviewParent = await git.commit([".ways/sdd/failing/review.md", "implementation.ts"], "implement", { work: "failing", phase: "implement", state: "completed" });
@@ -80,7 +92,9 @@ async function expectTransition(cwd: string, git: GitRepository, source: "review
   const state = (await loadState(cwd))!;
   expect(state).toMatchObject({ phase: target, attempt: 1, gateCommit: prior, remediation: { source, target, attempt: 1, reason: `address ${source} failure` } });
   expect(state.lastCompletedPhase).toBeUndefined();
-  expect(await readFile(join(cwd, `.ways/sdd/failing/${source}.md`), "utf8")).toBe(oldSource);
+  const recordedSource = await readFile(join(cwd, `.ways/sdd/failing/${source}.md`), "utf8");
+  expect(recordedSource).toContain(oldSource.trimEnd());
+  if (source === "validate") expect(recordedSource).toMatch(/^Failure-Digest: [0-9a-f]{64}$/m);
   expect(await readFile(join(cwd, attemptPhasePath("failing", 1, target)), "utf8")).toContain(`# ${target}`);
   const record = JSON.parse(await readFile(join(cwd, remediationRecordPath("failing", 1)), "utf8"));
   expect(record).toMatchObject({ source, target, attempt: 1, priorCheckpoint: prior });
@@ -125,8 +139,10 @@ describe("SDD remediation transitions", { timeout: 120_000 }, () => {
 
     const hash = await remediateSdd(fixture.cwd, "implement", `address ${source} failure`);
 
-    expect(await readFile(join(fixture.cwd, sourcePath), "utf8")).toBe(sourceArtifact);
-    expect(await fixture.git.run(["show", `${hash}:${sourcePath}`])).toBe(sourceArtifact.trimEnd());
+    const recordedSource = await readFile(join(fixture.cwd, sourcePath), "utf8");
+    expect(recordedSource).toContain(sourceArtifact.trimEnd());
+    if (source === "validate") expect(recordedSource).toMatch(/^Failure-Digest: [0-9a-f]{64}$/m);
+    expect(await fixture.git.run(["show", `${hash}:${sourcePath}`])).toBe(recordedSource.trimEnd());
     const record = JSON.parse(await readFile(join(fixture.cwd, remediationRecordPath("failing", 1)), "utf8"));
     expect(record.evidence.kind).toBe(source);
     if (source === "review") {
@@ -135,6 +151,65 @@ describe("SDD remediation transitions", { timeout: 120_000 }, () => {
     } else {
       expect(record.evidence.failures).toContainEqual(expect.objectContaining({ check: "configured-tests" }));
     }
+  });
+
+  it.each(["review", "validate"] as const)("rejects schema-valid detached %s failure evidence in the hook, history, and integrity", async (source) => {
+    const fixture = source === "review" ? await reviewRepository() : await validateRepository();
+    const state = (await loadState(fixture.cwd))!;
+    const priorCheckpoint = await fixture.git.head();
+    let evidence: RemediationEvidence;
+    if (source === "review") {
+      const reviewPath = join(fixture.cwd, fixture.reviewPath!);
+      const review = JSON.parse(await readFile(reviewPath, "utf8"));
+      review.digest = "0".repeat(64);
+      await writeFile(reviewPath, `${JSON.stringify(review, null, 2)}\n`);
+      evidence = { kind: "review", review };
+    } else {
+      evidence = {
+        kind: "validate",
+        failures: [{ check: "configured-tests", detail: "Configured test command exited with status 7" }],
+      };
+    }
+    const timestamp = new Date().toISOString();
+    const record = {
+      schemaVersion: 1 as const,
+      workId: "failing",
+      source,
+      target: "implement" as const,
+      reason: "fabricate failed evidence",
+      evidence,
+      priorCheckpoint,
+      attempt: 1,
+      timestamp,
+    };
+    const recordPath = join(fixture.cwd, remediationRecordPath("failing", 1));
+    await mkdir(join(recordPath, ".."), { recursive: true });
+    await writeFile(recordPath, `${JSON.stringify(record, null, 2)}\n`);
+    const reopened: WorkState = {
+      ...state,
+      phase: "implement",
+      gateCommit: priorCheckpoint,
+      updatedAt: timestamp,
+      attempt: 1,
+      remediation: {
+        source: record.source,
+        target: record.target,
+        reason: record.reason,
+        evidence: record.evidence,
+        priorCheckpoint: record.priorCheckpoint,
+        attempt: record.attempt,
+        timestamp: record.timestamp,
+      },
+    };
+    delete reopened.lastCompletedPhase;
+    await writeFile(join(fixture.cwd, attemptPhasePath("failing", 1, "implement")), "# implement\n\nGoal:\nEvidence:\nDecision:\nGate:\n");
+    await saveState(fixture.cwd, reopened);
+    await fixture.git.run(["add", "."]);
+    const message = "fabricate remediation\n\nHarness-Work: failing\nHarness-Phase: " + source + "\nHarness-State: remediated-implement\nHarness-Attempt: 1";
+    expect(await judgeCommitMessage(fixture.cwd, message)).toMatchObject({ accepted: false });
+    await fixture.git.run(["commit", "-q", "--no-verify", "-m", "fabricate remediation", "-m", `Harness-Work: failing\nHarness-Phase: ${source}\nHarness-State: remediated-implement\nHarness-Attempt: 1`]);
+    expect((await checkHistory(fixture.cwd)).map((issue) => issue.code)).toContain("history-invalid-remediation-evidence");
+    expect((await checkIntegrity(fixture.cwd)).map((issue) => issue.code)).toContain("state-git-divergence");
   });
 
   it("opens a remediation from the CLI and projects its attempt in status", async () => {
