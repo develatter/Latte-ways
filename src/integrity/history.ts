@@ -210,6 +210,29 @@ async function validationFailureIssues(git: GitRepository, commits: readonly Com
   return issues;
 }
 
+async function legacyTransitionArtifacts(git: GitRepository, commit: CommitInfo, work: string, attempt: number): Promise<Set<string>> {
+  const allowed = new Set<string>();
+  if (commit.trailers.state !== "remediated") return allowed;
+  try {
+    const value: unknown = JSON.parse(await git.run(["show", `${commit.hash}:${remediationRecordPath(work, attempt)}`]));
+    if (!validateRemediation(value) || value.workId !== work || value.attempt !== attempt) return allowed;
+    allowed.add(remediationRecordPath(work, attempt));
+    const sourceAttempt = attempt - 1;
+    if (value.source === "review") {
+      allowed.add(attemptPhasePath(work, sourceAttempt, "review"));
+      allowed.add(attemptReviewPath(work, sourceAttempt));
+    } else if (value.evidence.kind === "validate" && !("failureRecord" in value.evidence)) {
+      // v1 validation remediation captured its inline failure marker in the
+      // previous validate artifact. New transitions link a prior committed
+      // validation-failure record and must not receive this exception.
+      allowed.add(attemptPhasePath(work, sourceAttempt, "validate"));
+    }
+  } catch {
+    // The remediation evidence check reports malformed legacy records.
+  }
+  return allowed;
+}
+
 async function priorArtifactMutationIssues(git: GitRepository, commits: readonly CommitInfo[]): Promise<IntegrityIssue[]> {
   const issues: IntegrityIssue[] = [];
   for (const commit of commits) {
@@ -226,6 +249,7 @@ async function priorArtifactMutationIssues(git: GitRepository, commits: readonly
         allowed.add(attemptReviewPath(work, sourceAttempt));
       }
     }
+    for (const path of await legacyTransitionArtifacts(git, commit, work, attempt)) allowed.add(path);
     const changed = (await git.run(["diff-tree", "--no-commit-id", "--name-only", "-r", commit.hash])).split("\n").filter(Boolean);
     const protectedPath = changed.find((path) => !allowed.has(path) && isPriorAttemptArtifact(path, work, attempt));
     if (protectedPath) issue(issues, commit, "history-prior-artifact-mutated", `Prior SDD artifact was modified during attempt ${attempt}: ${protectedPath}`);
@@ -240,7 +264,7 @@ export async function auditHistory(git: GitRepository, commits: readonly CommitI
     ...replayed.issues,
     ...await remediationEvidenceIssues(git, replayed.checkpoints),
     ...await validationFailureIssues(git, commits),
-    ...await priorArtifactMutationIssues(git, replayCommitsInput),
+    ...await priorArtifactMutationIssues(git, commits),
   ] };
 }
 

@@ -4,7 +4,7 @@ import { join } from "node:path";
 import { describe, expect, it, vi } from "vitest";
 import { bootstrap } from "../src/bootstrap/bootstrap.js";
 import { run } from "../src/cli.js";
-import type { RemediationEvidence, RemediationTarget, WorkState } from "../src/domain/types.js";
+import type { RemediationEvidence, RemediationTarget, ValidationFailureRecord, WorkState } from "../src/domain/types.js";
 import { GitRepository } from "../src/git/git.js";
 import { judgeCommitMessage } from "../src/hooks/hook.js";
 import { checkHistory } from "../src/integrity/history.js";
@@ -13,13 +13,16 @@ import { loadState, saveState } from "../src/state/store.js";
 import { approveInteractively } from "../src/work/approve.js";
 import { attemptPhasePath, attemptReviewPath, remediationRecordPath, validationFailureRecordPath } from "../src/work/attempt.js";
 import { reviewDigest, submitReview } from "../src/work/review.js";
-import { remediateSdd } from "../src/work/remediation.js";
-import { recordValidationFailure, validationFailureDigest } from "../src/work/validation-failure.js";
+import { failureEvidenceDigest, remediateSdd } from "../src/work/remediation.js";
+import { recordValidationFailure, validationFailureDigest, validationFailureReplayFailure } from "../src/work/validation-failure.js";
 import { advanceSdd } from "../src/work/sdd.js";
 
 const targets: RemediationTarget[] = ["implement", "decompose", "plan", "specify"];
 
-async function baseRepository(testExit = 0): Promise<{ cwd: string; git: GitRepository; base: string }> {
+async function baseRepository(
+  testExit = 0,
+  testCommand = [process.execPath, "-e", `process.exit(${testExit})`],
+): Promise<{ cwd: string; git: GitRepository; base: string }> {
   const cwd = await mkdtemp(join(tmpdir(), "ways-remediate-"));
   const git = new GitRepository(cwd);
   await git.run(["init", "-q"]);
@@ -27,7 +30,7 @@ async function baseRepository(testExit = 0): Promise<{ cwd: string; git: GitRepo
   await git.run(["config", "user.email", "ways@example.test"]);
   await writeFile(join(cwd, ".gitkeep"), "");
   await git.commit([".gitkeep"], "initial", {});
-  await bootstrap({ cwd, testCommand: [process.execPath, "-e", `process.exit(${testExit})`] });
+  await bootstrap({ cwd, testCommand });
   await git.run(["add", "."]);
   await git.run(["commit", "-q", "-m", "bootstrap"]);
   // Synthetic lifecycle setup commits are intentionally assembled directly.
@@ -85,6 +88,41 @@ async function validateRepository(testExit = 7): Promise<{ cwd: string; git: Git
   await git.commit(await git.changedPaths(), "review", { work: "failing", phase: "review", state: "completed" });
   await recordValidationFailure(cwd);
   return { cwd, git, prior: await git.head() };
+}
+
+async function legacyValidationTransition(): Promise<{ cwd: string; git: GitRepository; prior: string }> {
+  const { cwd, git } = await validateRepository();
+  await git.run(["reset", "--hard", "HEAD^"]);
+  const prior = await git.head();
+  const state = (await loadState(cwd))!;
+  const evidence: RemediationEvidence = {
+    kind: "validate",
+    failures: [{ check: "configured-tests", detail: "Configured test command exited with status 7" }],
+  };
+  const timestamp = new Date().toISOString();
+  const record = {
+    schemaVersion: 1 as const,
+    workId: "failing",
+    source: "validate" as const,
+    target: "implement" as const,
+    reason: "legacy inline validation remediation",
+    evidence,
+    priorCheckpoint: prior,
+    attempt: 1,
+    timestamp,
+  };
+  const validatePath = attemptPhasePath("failing", 0, "validate");
+  const validate = await readFile(join(cwd, validatePath), "utf8");
+  await writeFile(join(cwd, validatePath), `${validate.replace("Decision:", "Decision: fail").replace("Gate:", "Gate: remediate").trimEnd()}\nFailure-Digest: ${failureEvidenceDigest(evidence)}\n`);
+  await mkdir(join(cwd, remediationRecordPath("failing", 1), ".."), { recursive: true });
+  await writeFile(join(cwd, remediationRecordPath("failing", 1)), `${JSON.stringify(record, null, 2)}\n`);
+  await writeFile(join(cwd, attemptPhasePath("failing", 1, "implement")), "# implement\n\nGoal:\nEvidence:\nDecision:\nGate:\n");
+  const { schemaVersion: _schemaVersion, workId: _workId, ...metadata } = record;
+  const reopened: WorkState = { ...state, phase: "implement", gateCommit: prior, attempt: 1, remediation: metadata, updatedAt: timestamp };
+  delete reopened.lastCompletedPhase;
+  await saveState(cwd, reopened);
+  await git.commit(await git.changedPaths(), "legacy validation remediation", { work: "failing", state: "remediated", attempt: "1" });
+  return { cwd, git, prior };
 }
 
 async function expectTransition(cwd: string, git: GitRepository, source: "review" | "validate", target: RemediationTarget, prior: string): Promise<void> {
@@ -338,6 +376,46 @@ describe("SDD remediation transitions", { timeout: 120_000 }, () => {
     await git.commit(await git.changedPaths(), "legacy remediation", { work: "failing", state: "remediated", attempt: "1" });
     expect(await checkHistory(cwd)).toEqual([]);
     expect(await checkIntegrity(cwd)).toEqual([]);
+  });
+
+  it("accepts legacy inline validation remediation while retaining prior-artifact protection", async () => {
+    const legacy = await legacyValidationTransition();
+    expect(await checkHistory(legacy.cwd)).toEqual([]);
+    expect(await checkIntegrity(legacy.cwd)).toEqual([]);
+
+    await writeFile(join(legacy.cwd, attemptPhasePath("failing", 0, "review")), "forged prior artifact\n");
+    await legacy.git.run(["add", ".ways/sdd/failing/review.md"]);
+    await legacy.git.run(["commit", "-q", "--no-verify", "--amend", "--no-edit"]);
+    expect((await checkHistory(legacy.cwd)).map((issue) => issue.code)).toContain("history-prior-artifact-mutated");
+  });
+
+  it("does not exempt prior validation artifacts from recorded-validation remediation", async () => {
+    const { cwd, git } = await validateRepository();
+    await remediateSdd(cwd, "implement", "preserve recorded validation evidence");
+    const path = attemptPhasePath("failing", 0, "validate");
+    await writeFile(join(cwd, path), "forged legacy-style validation artifact\n");
+    await git.run(["add", path]);
+    await git.run(["commit", "-q", "--no-verify", "--amend", "--no-edit"]);
+    expect((await checkHistory(cwd)).map((issue) => issue.code)).toContain("history-prior-artifact-mutated");
+  });
+
+  it("prunes detached replay metadata when checks damage the replay worktree", async () => {
+    const testCommand = [process.execPath, "-e", "require('node:fs').rmSync('.git'); process.exit(7);"];
+    const { git } = await baseRepository(0, testCommand);
+    const inputCommit = await git.head();
+    const record: ValidationFailureRecord = {
+      schemaVersion: 1,
+      workId: "failing",
+      attempt: 0,
+      phase: "validate",
+      inputCommit,
+      inputTree: await git.run(["rev-parse", "HEAD^{tree}"]),
+      testCommand,
+      checks: { integrity: [], testExitCode: 7 },
+      digest: "0".repeat(64),
+    };
+    expect(await validationFailureReplayFailure(git, record)).toBeUndefined();
+    expect(await git.run(["worktree", "list", "--porcelain"])).not.toContain("validation-replay-");
   });
 
   it("records failed checks through the CLI and preserves the passing validate path", async () => {

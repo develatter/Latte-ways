@@ -39,37 +39,47 @@ function sameChecks(left: ValidationFailureRecord["checks"], right: ValidationFa
  * The command remains shell-free through runChecks; local Git cannot attest
  * who authored a reproducible record, only that its claimed result is real.
  */
+async function replayCleanupFailure(git: GitRepository, replayCwd: string): Promise<string | undefined> {
+  try {
+    await git.run(["worktree", "remove", "--force", replayCwd]);
+  } catch {
+    // A damaged replay worktree can make remove fail. Remove its directory,
+    // then prune the registration rather than leaving admin metadata behind.
+  }
+  try {
+    await rm(replayCwd, { recursive: true, force: true });
+    await git.run(["worktree", "prune"]);
+    const registered = (await git.run(["worktree", "list", "--porcelain"])).split("\n").includes(`worktree ${replayCwd}`);
+    return registered ? "validation failure replay cleanup left a detached worktree registration" : undefined;
+  } catch {
+    return "validation failure replay cleanup could not remove its detached worktree registration";
+  }
+}
+
 export async function validationFailureReplayFailure(git: GitRepository, record: ValidationFailureRecord): Promise<string | undefined> {
   const root = await git.root();
   const runtime = join(root, ".ways", "runtime");
   await mkdir(runtime, { recursive: true });
   const replayCwd = await mkdtemp(join(runtime, "validation-replay-"));
-  let added = false;
+  let replayFailure: string | undefined;
   try {
     await git.run(["worktree", "add", "--detach", "--force", replayCwd, record.inputCommit]);
-    added = true;
     const replayGit = new GitRepository(replayCwd);
     if (await replayGit.head() !== record.inputCommit || await replayGit.run(["rev-parse", "HEAD^{tree}"]) !== record.inputTree) {
-      return "validation failure replay did not resolve the recorded input commit and tree";
-    }
-    const config = await loadConfig(replayCwd);
-    if (JSON.stringify(config.testCommand) !== JSON.stringify(record.testCommand)) {
-      return "validation failure replay command does not match its recorded input";
-    }
-    const replayed = canonicalChecks(await runChecks(replayCwd));
-    return sameChecks(replayed, record.checks) ? undefined : "validation failure record check results cannot be reproduced from its recorded input";
-  } catch {
-    return "validation failure record check results cannot be replayed from its recorded input";
-  } finally {
-    if (added) {
-      try {
-        await git.run(["worktree", "remove", "--force", replayCwd]);
-      } catch {
-        // The filesystem cleanup below is the final best effort for a failed replay.
+      replayFailure = "validation failure replay did not resolve the recorded input commit and tree";
+    } else {
+      const config = await loadConfig(replayCwd);
+      if (JSON.stringify(config.testCommand) !== JSON.stringify(record.testCommand)) {
+        replayFailure = "validation failure replay command does not match its recorded input";
+      } else {
+        const replayed = canonicalChecks(await runChecks(replayCwd));
+        replayFailure = sameChecks(replayed, record.checks) ? undefined : "validation failure record check results cannot be reproduced from its recorded input";
       }
     }
-    await rm(replayCwd, { recursive: true, force: true });
+  } catch {
+    replayFailure = "validation failure record check results cannot be replayed from its recorded input";
   }
+  return await replayCleanupFailure(git, replayCwd) ?? replayFailure;
 }
 
 async function committedFailureRecord(git: GitRepository, workId: string, attempt: number, commit: string): Promise<ValidationFailureRecord | undefined> {
