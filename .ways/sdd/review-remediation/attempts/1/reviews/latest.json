@@ -1,0 +1,22 @@
+{
+  "schemaVersion": 1,
+  "workId": "review-remediation",
+  "attempt": 1,
+  "reviewer": "ways-reviewer",
+  "digest": "c8233476d3b058f4a58bbeb29edc3ebbf0b14953ab574a288f0f6e3f2a18d937",
+  "verdict": "fail",
+  "findings": [
+    {
+      "id": "RR-002",
+      "severity": "high",
+      "summary": "Integrated delegated task commits can mutate prior-attempt artifacts and still pass implementation certification; detection is deferred to history checking.",
+      "disposition": "open"
+    },
+    {
+      "id": "RR-003",
+      "severity": "high",
+      "summary": "Validation remediation evidence remains forgeable because its digest marker and formatted failure entries are self-attested rather than linked to a deterministically verifiable failed gate.",
+      "disposition": "open"
+    }
+  ]
+}

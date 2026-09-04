@@ -4,55 +4,44 @@
   "mode": "sdd",
   "id": "review-remediation",
   "status": "active",
-  "gateCommit": "e52f7503f8b2578fe8b41444a021a20bf0dcdb1f",
-  "updatedAt": "2026-09-04T06:18:15.231Z",
-  "phase": "review",
+  "gateCommit": "7ff3093bd4ea7c446c3da3bb3b833ec9e28cd185",
+  "updatedAt": "2026-09-04T06:20:49.836Z",
+  "phase": "implement",
   "humanGate": false,
   "profile": "autonomous",
   "execution": "delegated",
-  "attempt": 1,
+  "attempt": 2,
   "remediation": {
     "source": "review",
     "target": "implement",
-    "reason": "Independent review found delegated dirty-file provenance, prior-artifact immutability, forged failure-evidence, and approval-path defects (RR-001..RR-004)",
+    "reason": "Attempt-1 independent review found RR-002 immediate integrated-artifact enforcement and RR-003 validation-evidence provenance gaps",
     "evidence": {
       "kind": "review",
       "review": {
         "schemaVersion": 1,
         "workId": "review-remediation",
+        "attempt": 1,
         "reviewer": "ways-reviewer",
-        "digest": "1c74752a638ce525f1750229b34b8eb5377645984b854e0828ee69c6ec778f98",
+        "digest": "c8233476d3b058f4a58bbeb29edc3ebbf0b14953ab574a288f0f6e3f2a18d937",
         "verdict": "fail",
         "findings": [
           {
-            "id": "RR-001",
-            "severity": "critical",
-            "summary": "Delegated implementation permits dirty or staged production changes to be absorbed into the trusted certification commit without task provenance.",
-            "disposition": "open"
-          },
-          {
             "id": "RR-002",
-            "severity": "critical",
-            "summary": "Prior attempt artifacts are mutable, and deleting then re-adding remediation.json can move the review baseline forward and omit remediation commits.",
+            "severity": "high",
+            "summary": "Integrated delegated task commits can mutate prior-attempt artifacts and still pass implementation certification; detection is deferred to history checking.",
             "disposition": "open"
           },
           {
             "id": "RR-003",
             "severity": "high",
-            "summary": "Hook and history verification accept fabricated schema-valid review or validation failure evidence without proving the failed gate.",
-            "disposition": "open"
-          },
-          {
-            "id": "RR-004",
-            "severity": "high",
-            "summary": "Remediated human approval instructs the approver to inspect the attempt-zero phase path instead of the active attempt-scoped artifact.",
+            "summary": "Validation remediation evidence remains forgeable because its digest marker and formatted failure entries are self-attested rather than linked to a deterministically verifiable failed gate.",
             "disposition": "open"
           }
         ]
       }
     },
-    "priorCheckpoint": "11efed7ab19b65fe6181be33e33b62e5ad36ba61",
-    "attempt": 1,
-    "timestamp": "2026-09-03T12:07:36.978Z"
+    "priorCheckpoint": "7ff3093bd4ea7c446c3da3bb3b833ec9e28cd185",
+    "attempt": 2,
+    "timestamp": "2026-09-04T06:20:49.836Z"
   }
 }
