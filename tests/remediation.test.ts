@@ -14,7 +14,7 @@ import { approveInteractively } from "../src/work/approve.js";
 import { attemptPhasePath, attemptReviewPath, remediationRecordPath, validationFailureRecordPath } from "../src/work/attempt.js";
 import { reviewDigest, submitReview } from "../src/work/review.js";
 import { failureEvidenceDigest, remediationEvidenceFailure, remediateSdd } from "../src/work/remediation.js";
-import { recordValidationFailure, validationFailureDigest, validationFailureReplayFailure } from "../src/work/validation-failure.js";
+import { committedValidationFailureFailure, recordValidationFailure, validationFailureCommit, validationFailureDigest, validationFailureReplayFailure } from "../src/work/validation-failure.js";
 import { advanceSdd, assertSddConsistency } from "../src/work/sdd.js";
 
 const targets: RemediationTarget[] = ["implement", "decompose", "plan", "specify"];
@@ -526,19 +526,57 @@ describe("SDD remediation transitions", { timeout: 120_000 }, () => {
     }
   });
 
-  it("requires remediation before a same-attempt passing validation can advance through the API or CLI", async () => {
-    const { cwd, git } = await validateRepository();
-    const configPath = ".ways/config.json";
-    const config = JSON.parse(await readFile(join(cwd, configPath), "utf8"));
-    config.testCommand = [process.execPath, "-e", "process.exit(0)"];
-    await writeFile(join(cwd, configPath), `${JSON.stringify(config, null, 2)}\n`);
-    await git.commit([configPath], "make validation pass", { work: "failing" });
-    const head = await git.head();
+  it("rejects a valid validation failure at HEAD through advanceSdd's post-consistency guard and the CLI", async () => {
+    const { cwd, git, prior } = await validateRepository();
+    const state = (await loadState(cwd))!;
 
-    await expect(advanceSdd(cwd)).rejects.toThrow(/validation failure requires remediation/i);
-    await expect(run(["sdd", "advance"], cwd)).rejects.toThrow(/validation failure requires remediation/i);
-    expect(await git.head()).toBe(head);
+    expect(await validationFailureCommit(git, state)).toBe(prior);
+    expect(await committedValidationFailureFailure(git, "failing", 0, prior)).toBeUndefined();
+    await expect(assertSddConsistency(cwd, state)).resolves.toBeUndefined();
+    await expect(advanceSdd(cwd)).rejects.toThrow(/requires remediation before this attempt can pass validation/);
+    await expect(run(["sdd", "advance"], cwd)).rejects.toThrow(/requires remediation before this attempt can pass validation/);
+    expect(await git.head()).toBe(prior);
     expect((await loadState(cwd))?.phase).toBe("validate");
+  });
+
+  it("rejects an attempt-one validation failure before advancing and opens an additive next remediation", async () => {
+    const { cwd, git } = await validateRepository();
+    await remediateSdd(cwd, "implement", "fix initial validation failure");
+
+    let state = (await loadState(cwd))!;
+    let path = join(cwd, attemptPhasePath("failing", 1, "implement"));
+    await writeFile(path, (await readFile(path, "utf8")).replace("Goal:", "Goal: retry implementation").replace("Evidence:", "Evidence: remediation attempt"));
+    await advanceSdd(cwd);
+    path = join(cwd, attemptPhasePath("failing", 1, "review"));
+    await writeFile(path, (await readFile(path, "utf8")).replace("Goal:", "Goal: retry review").replace("Evidence:", "Evidence: remediation attempt"));
+    const input = join(await mkdtemp(join(tmpdir(), "ways-review-input-")), "attempt-one-review.json");
+    await writeFile(input, JSON.stringify({
+      schemaVersion: 1, workId: "failing", attempt: 1, reviewer: "fresh reviewer",
+      digest: await reviewDigest(cwd), verdict: "pass", findings: [],
+    }));
+    await submitReview(cwd, input);
+    await advanceSdd(cwd);
+
+    state = (await loadState(cwd))!;
+    expect(state).toMatchObject({ attempt: 1, phase: "validate" });
+    const failure = await recordValidationFailure(cwd);
+    const failureHead = await git.head();
+    expect(failure).toMatchObject({ attempt: 1, phase: "validate" });
+    expect(await validationFailureCommit(git, (await loadState(cwd))!)).toBe(failureHead);
+    await expect(assertSddConsistency(cwd, (await loadState(cwd))!)).resolves.toBeUndefined();
+    await expect(advanceSdd(cwd)).rejects.toThrow(/requires remediation before this attempt can pass validation/);
+    await expect(run(["sdd", "advance"], cwd)).rejects.toThrow(/requires remediation before this attempt can pass validation/);
+    expect(await git.head()).toBe(failureHead);
+
+    const transition = await remediateSdd(cwd, "implement", "fix attempt-one validation failure");
+    expect(await git.parent(transition)).toBe(failureHead);
+    expect((await loadState(cwd))!).toMatchObject({
+      attempt: 2,
+      phase: "implement",
+      remediation: { source: "validate", attempt: 2, evidence: { failureRecord: { commit: failureHead } } },
+    });
+    expect(JSON.parse(await readFile(join(cwd, validationFailureRecordPath("failing", 1)), "utf8"))).toMatchObject({ attempt: 1, phase: "validate" });
+    await expect(assertSddConsistency(cwd, (await loadState(cwd))!)).resolves.toBeUndefined();
   });
 
   it("rejects a no-verify completed validation after a recorded failure in history and active consistency", async () => {
