@@ -12,7 +12,7 @@ import { approvalPath, assertApproved, requiresApproval } from "./approve.js";
 import { attemptNumber, attemptPhasePath, remediationTransitionCommit } from "./attempt.js";
 import { assertReviewPassed } from "./review.js";
 import { assertDelegatedCertificationTree, assertDelegatedImplementation } from "./tasks.js";
-import { committedValidationFailureFailure } from "./validation-failure.js";
+import { committedValidationFailureFailure, validationFailureCommit } from "./validation-failure.js";
 
 function phasePath(state: WorkState, phase: SddPhase): string {
   return attemptPhasePath(state.id, state.attempt, phase);
@@ -51,6 +51,14 @@ export async function assertSddConsistency(cwd: string, state: WorkState): Promi
   const head = await git.head();
   await assertProfileCommitted(git, state);
   const attempt = attemptNumber(state.attempt);
+  const failureCommit = await validationFailureCommit(git, state);
+  if (failureCommit) {
+    if (state.phase !== "validate" || failureCommit !== head) {
+      throw new Error("A committed validation failure requires remediation before this attempt can continue; run ways repair");
+    }
+    const failure = await committedValidationFailureFailure(git, state.id, attempt, failureCommit);
+    if (failure) throw new Error(`Validation failure record is invalid: ${failure}; run ways repair`);
+  }
   if (!state.lastCompletedPhase) {
     if (attempt === 0) {
       if (head !== state.baseCommit && !await isOpeningCommit(git, state, head)) throw new Error("SDD state diverged before its first gate; run ways repair");
@@ -152,6 +160,10 @@ export async function advanceSdd(cwd: string): Promise<string> {
   const state = await loadState(cwd);
   if (!state || state.mode !== "sdd" || !state.phase) throw new Error("No active SDD work");
   await assertSddConsistency(cwd, state);
+  const validationGit = new GitRepository(cwd);
+  if (state.phase === "validate" && await validationFailureCommit(validationGit, state)) {
+    throw new Error("A committed validation failure requires remediation before this attempt can pass validation");
+  }
   if (state.phase === "implement" && state.execution === "delegated") {
     // Check both the index and worktree before creating the next phase or rewriting state.
     await assertDelegatedCertificationTree(cwd, state);

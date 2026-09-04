@@ -279,7 +279,7 @@ describe("SDD remediation transitions", { timeout: 120_000 }, () => {
     await git.run(["add", path]);
     await git.run(["commit", "-q", "--no-verify", "--amend", "--no-edit"]);
     expect((await checkHistory(cwd)).map((issue) => issue.code)).toContain("history-invalid-validation-failure");
-    await expect(remediateSdd(cwd, "implement", "link forged failure")).rejects.toThrow(/committed validation failure record/);
+    await expect(remediateSdd(cwd, "implement", "link forged failure")).rejects.toThrow(/validation failure record/);
     expect(await git.head()).not.toBe(prior);
   });
 
@@ -500,6 +500,48 @@ describe("SDD remediation transitions", { timeout: 120_000 }, () => {
     } finally {
       log.mockRestore();
     }
+  });
+
+  it("requires remediation before a same-attempt passing validation can advance through the API or CLI", async () => {
+    const { cwd, git } = await validateRepository();
+    const configPath = ".ways/config.json";
+    const config = JSON.parse(await readFile(join(cwd, configPath), "utf8"));
+    config.testCommand = [process.execPath, "-e", "process.exit(0)"];
+    await writeFile(join(cwd, configPath), `${JSON.stringify(config, null, 2)}\n`);
+    await git.commit([configPath], "make validation pass", { work: "failing" });
+    const head = await git.head();
+
+    await expect(advanceSdd(cwd)).rejects.toThrow(/validation failure requires remediation/i);
+    await expect(run(["sdd", "advance"], cwd)).rejects.toThrow(/validation failure requires remediation/i);
+    expect(await git.head()).toBe(head);
+    expect((await loadState(cwd))?.phase).toBe("validate");
+  });
+
+  it("rejects a no-verify completed validation after a recorded failure in history and active consistency", async () => {
+    const { cwd, git } = await validateRepository();
+    const state = (await loadState(cwd))!;
+    state.phase = "reconcile-memory";
+    state.lastCompletedPhase = "validate";
+    state.gateCommit = await git.head();
+    state.updatedAt = new Date().toISOString();
+    await writeFile(join(cwd, attemptPhasePath("failing", 0, "reconcile-memory")), "# reconcile-memory\n\nGoal:\nEvidence:\nDecision:\nGate:\n");
+    await saveState(cwd, state);
+    await git.run(["add", "."]);
+    await git.run(["commit", "-q", "--no-verify", "-m", "forge passing validation", "-m", "Harness-Work: failing\nHarness-Phase: validate\nHarness-State: completed"]);
+
+    expect((await checkHistory(cwd)).map((issue) => issue.code)).toContain("history-broken-chain");
+    await expect(assertSddConsistency(cwd, (await loadState(cwd))!)).rejects.toThrow(/validation failure requires remediation/i);
+    expect((await checkIntegrity(cwd)).map((issue) => issue.code)).toContain("state-git-divergence");
+  });
+
+  it("permits initial passing validation when no failure record exists", async () => {
+    const { cwd } = await validateRepository(0);
+    const path = join(cwd, attemptPhasePath("failing", 0, "validate"));
+    const content = await readFile(path, "utf8");
+    await writeFile(path, content.replace("Goal:", "Goal: validate").replace("Evidence:", "Evidence: checks pass"));
+
+    await expect(advanceSdd(cwd)).resolves.toBeTruthy();
+    expect((await loadState(cwd))?.phase).toBe("reconcile-memory");
   });
 
   it("opens a remediation from the CLI and projects its attempt in status", async () => {

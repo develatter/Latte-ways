@@ -51,6 +51,7 @@ export async function commitsAfter(git: GitRepository, anchor: string): Promise<
 interface ReplayState {
   attempt: number;
   nextPhase: SddPhase;
+  validationFailed: boolean;
 }
 
 function issue(issues: IntegrityIssue[], commit: CommitInfo, code: string, message: string): void {
@@ -80,7 +81,7 @@ export function replayCommits(commits: readonly CommitInfo[], activeId?: string)
     if (state === "opened") opened.set(work, commit.hash.slice(0, 12));
     else if (state === "completed" || state === "cancelled") opened.delete(work);
 
-    const current = replay.get(work) ?? { attempt: 0, nextPhase: "intake" };
+    const current = replay.get(work) ?? { attempt: 0, nextPhase: "intake", validationFailed: false };
     if (commit.trailers.task && parsedAttempt(commit.trailers.attempt) !== current.attempt) {
       issue(issues, commit, "history-attempt-mismatch", `Task commit for ${work} does not belong to remediation attempt ${current.attempt}`);
       continue;
@@ -91,8 +92,10 @@ export function replayCommits(commits: readonly CommitInfo[], activeId?: string)
     }
     if (state === "validation-failed") {
       const attempt = parsedAttempt(commit.trailers.attempt);
-      if (phase !== "validate" || attempt === undefined || attempt !== current.attempt || current.nextPhase !== "validate") {
+      if (phase !== "validate" || attempt === undefined || attempt !== current.attempt || current.nextPhase !== "validate" || current.validationFailed) {
         issue(issues, commit, "history-invalid-validation-failure", `Validation failure record for ${work} is not in validate of attempt ${current.attempt}`);
+      } else {
+        replay.set(work, { ...current, validationFailed: true });
       }
       continue;
     }
@@ -109,7 +112,7 @@ export function replayCommits(commits: readonly CommitInfo[], activeId?: string)
         issue(issues, commit, "history-invalid-remediation", `Remediation transition for ${work} is not a legal ${current.nextPhase} attempt ${current.attempt + 1} transition`);
         continue;
       }
-      replay.set(work, { attempt, nextPhase: target });
+      replay.set(work, { attempt, nextPhase: target, validationFailed: false });
       checkpoints.push({ work, attempt, kind: "remediation", commit, phase: phase as SddPhase, target });
       continue;
     }
@@ -117,12 +120,16 @@ export function replayCommits(commits: readonly CommitInfo[], activeId?: string)
     if (state !== "completed" || !phase || !SDD_PHASES.includes(phase as SddPhase)) continue;
     const attempt = parsedAttempt(commit.trailers.attempt);
     const completed = phase as SddPhase;
+    if (current.validationFailed) {
+      issue(issues, commit, "history-broken-chain", `Certification of ${completed} for ${work} bypasses a validation failure in attempt ${current.attempt}; remediation is required`);
+      continue;
+    }
     if (attempt === undefined || attempt !== current.attempt || completed !== current.nextPhase) {
       issue(issues, commit, "history-broken-chain", `Certification of ${completed} for ${work} is out of order for attempt ${current.attempt}; expected ${current.nextPhase}`);
       continue;
     }
     const next = SDD_PHASES[SDD_PHASES.indexOf(completed) + 1];
-    if (next) replay.set(work, { attempt: current.attempt, nextPhase: next });
+    if (next) replay.set(work, { attempt: current.attempt, nextPhase: next, validationFailed: false });
     else replay.delete(work);
     checkpoints.push({ work, attempt, kind: "certification", commit, phase: completed });
   }

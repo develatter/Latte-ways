@@ -132,6 +132,22 @@ export async function legacyValidationFailureReplayFailure(
   return await replayCleanupFailure(git, replayCwd) ?? replayFailure;
 }
 
+/** Find any validation-failed commit in the active attempt, including malformed evidence that must fail closed. */
+export async function validationFailureCommit(git: GitRepository, state: WorkState): Promise<string | undefined> {
+  const attempt = attemptNumber(state.attempt);
+  const baseline = attempt === 0 ? state.baseCommit : state.remediation?.priorCheckpoint;
+  if (!baseline) return undefined;
+  const expectedAttempt = String(attempt);
+  for (const hash of (await git.run(["rev-list", `${baseline}..HEAD`])).split("\n").filter(Boolean)) {
+    const info = await git.commitInfo(hash);
+    if (info.trailers.work === state.id && info.trailers.phase === "validate" && info.trailers.state === "validation-failed"
+      && (attempt === 0 ? info.trailers.attempt === undefined || info.trailers.attempt === expectedAttempt : info.trailers.attempt === expectedAttempt)) {
+      return hash;
+    }
+  }
+  return undefined;
+}
+
 async function committedFailureRecord(git: GitRepository, workId: string, attempt: number, commit: string): Promise<ValidationFailureRecord | undefined> {
   try {
     const value: unknown = JSON.parse(await git.run(["show", `${commit}:${validationFailureRecordPath(workId, attempt)}`]));
