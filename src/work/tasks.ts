@@ -6,7 +6,7 @@ import { stableJson, writeAtomic } from "../fs/files.js";
 import { GitRepository } from "../git/git.js";
 import { commitsAfter } from "../integrity/history.js";
 import { loadState, saveState } from "../state/store.js";
-import { attemptNumber, attemptPhasePath, remediationTransitionCommit } from "./attempt.js";
+import { attemptNumber, attemptPhasePath, isPriorAttemptArtifact, remediationTransitionCommit } from "./attempt.js";
 
 function requireSdd(state: WorkState | undefined): WorkState {
   if (!state || state.mode !== "sdd") throw new Error("No active SDD work");
@@ -91,6 +91,12 @@ export async function prepareTask(cwd: string, id: string): Promise<TaskState> {
   return task;
 }
 
+async function priorArtifactChangedBy(git: GitRepository, commit: string, workId: string, attempt: number): Promise<string | undefined> {
+  const paths = (await git.run(["diff-tree", "--no-commit-id", "--no-renames", "--name-only", "-r", "--root", "-z", commit]))
+    .split("\0").filter(Boolean);
+  return paths.find((path) => isPriorAttemptArtifact(path, workId, attempt));
+}
+
 export async function integrateTask(cwd: string, id: string, commits: string[]): Promise<TaskState> {
   const state = requireSdd(await loadState(cwd));
   if (state.phase !== "implement") throw new Error("Tasks can only be integrated during implement");
@@ -108,6 +114,8 @@ export async function integrateTask(cwd: string, id: string, commits: string[]):
       throw new Error(`Commit ${commit} does not belong to task branch ${task.branch}`);
     }
     if (await git.isAncestor(info.hash)) throw new Error(`Commit ${commit} is already present in the orchestrator history`);
+    const immutablePath = await priorArtifactChangedBy(git, info.hash, state.id, attempt);
+    if (immutablePath) throw new Error(`Commit ${commit} mutates immutable prior SDD artifact: ${immutablePath}`);
   }
   for (const commit of commits) {
     await git.run(["cherry-pick", commit]);
