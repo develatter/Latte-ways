@@ -334,6 +334,30 @@ describe("SDD remediation transitions", { timeout: 120_000 }, () => {
     expect((await checkHistory(trailers.cwd)).map((issue) => issue.code)).toContain("history-invalid-validation-failure");
   });
 
+  it.each([
+    ["phase", "Harness-Phase: review"],
+    ["attempt", "Harness-Phase: validate\nHarness-Attempt: malformed"],
+  ])("fails closed when a no-verify validation-failed marker has a malformed %s trailer", async (_kind, markerTrailers) => {
+    const { cwd, git } = await validateRepository();
+    const validationPath = attemptPhasePath("failing", 0, "validate");
+    const configPath = ".ways/config.json";
+    await git.run(["reset", "--soft", "HEAD^"]);
+    await git.run(["commit", "-q", "--no-verify", "-m", "forge validation failure", "-m", `Harness-Work: failing\n${markerTrailers}\nHarness-State: validation-failed`]);
+
+    const config = JSON.parse(await readFile(join(cwd, configPath), "utf8"));
+    config.testCommand = [process.execPath, "-e", "process.exit(0)"];
+    await writeFile(join(cwd, configPath), `${JSON.stringify(config, null, 2)}\n`);
+    await writeFile(join(cwd, validationPath), "# validate\n\nGoal: validate\nEvidence: passing checks\nDecision: pass\nGate: advance\n");
+    const head = await git.commit([configPath, validationPath], "make validation pass", { work: "failing" });
+
+    await expect(advanceSdd(cwd)).rejects.toThrow(/validation failure requires remediation/i);
+    await expect(assertSddConsistency(cwd, (await loadState(cwd))!)).rejects.toThrow(/validation failure requires remediation/i);
+    expect((await checkHistory(cwd)).map((issue) => issue.code)).toContain("history-invalid-validation-failure");
+    expect((await checkIntegrity(cwd)).map((issue) => issue.code)).toContain("state-git-divergence");
+    expect(await git.head()).toBe(head);
+    expect((await loadState(cwd))?.phase).toBe("validate");
+  });
+
   it("rejects remediation validation evidence that does not link its parent failure commit", async () => {
     const { cwd, git, prior } = await validateRepository();
     await remediateSdd(cwd, "implement", "link failure");

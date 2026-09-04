@@ -137,13 +137,11 @@ export async function validationFailureCommit(git: GitRepository, state: WorkSta
   const attempt = attemptNumber(state.attempt);
   const baseline = attempt === 0 ? state.baseCommit : state.remediation?.priorCheckpoint;
   if (!baseline) return undefined;
-  const expectedAttempt = String(attempt);
   for (const hash of (await git.run(["rev-list", `${baseline}..HEAD`])).split("\n").filter(Boolean)) {
     const info = await git.commitInfo(hash);
-    if (info.trailers.work === state.id && info.trailers.phase === "validate" && info.trailers.state === "validation-failed"
-      && (attempt === 0 ? info.trailers.attempt === undefined || info.trailers.attempt === expectedAttempt : info.trailers.attempt === expectedAttempt)) {
-      return hash;
-    }
+    // A no-verify marker for the active work is evidence of a possible failed
+    // validation. Its malformed phase or attempt must not make it disappear.
+    if (info.trailers.work === state.id && info.trailers.state === "validation-failed") return hash;
   }
   return undefined;
 }
