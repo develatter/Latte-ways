@@ -1,5 +1,9 @@
 {
   "schemaVersion": 1,
-  "active": false,
-  "updatedAt": "2026-09-11T18:02:29.809Z"
+  "active": true,
+  "mode": "plan",
+  "id": "living-memory-upgrade",
+  "status": "active",
+  "gateCommit": "43efd935ae7e8a11ce3e0ca4b8da6ef1b7cd4e4d",
+  "updatedAt": "2026-09-11T18:16:52.924Z"
 }
