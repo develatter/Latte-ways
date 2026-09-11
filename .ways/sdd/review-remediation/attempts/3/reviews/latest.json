@@ -1,0 +1,22 @@
+{
+  "attempt": 3,
+  "digest": "67eff7815d4a95de356ab75290d0888023fe050a6200819d825a4a827a9c86b3",
+  "findings": [
+    {
+      "disposition": "fixed",
+      "id": "RR-005",
+      "severity": "high",
+      "summary": "Vitest discovery constrained via include: [\"tests/**/*.test.ts\"] in vitest.config.ts:5; full run collects exactly the 25 root suites and excludes nested .ways/worktrees suites."
+    },
+    {
+      "disposition": "fixed",
+      "id": "RR-006",
+      "severity": "high",
+      "summary": "Digest prefix instability fixed via DIGEST_DIFF pinning --src-prefix=a/ --dst-prefix=b/ in both committedWorkDigest and workDigest (src/work/digest.ts:33-36,42,49); review digest stable under diff.mnemonicPrefix=true and diff.noprefix=true and workDigest equals committedWorkDigest."
+    }
+  ],
+  "reviewer": "ways-reviewer",
+  "schemaVersion": 1,
+  "verdict": "pass",
+  "workId": "review-remediation"
+}
