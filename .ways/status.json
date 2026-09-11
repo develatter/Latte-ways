@@ -4,44 +4,44 @@
   "mode": "sdd",
   "id": "review-remediation",
   "status": "active",
-  "gateCommit": "f620239fd8048e52f849a3ab4006d57b073f2317",
-  "updatedAt": "2026-09-04T10:34:15.983Z",
-  "phase": "review",
+  "gateCommit": "5296b2552e8020494a0d4408cd70339265b5182f",
+  "updatedAt": "2026-09-11T17:39:13.398Z",
+  "phase": "implement",
   "humanGate": false,
   "profile": "autonomous",
   "execution": "delegated",
-  "attempt": 2,
+  "attempt": 3,
   "remediation": {
     "source": "review",
     "target": "implement",
-    "reason": "Attempt-1 independent review found RR-002 immediate integrated-artifact enforcement and RR-003 validation-evidence provenance gaps",
+    "reason": "RR-005-nested-test-discovery-and-RR-006-Git-dependent-review-digests",
     "evidence": {
       "kind": "review",
       "review": {
         "schemaVersion": 1,
         "workId": "review-remediation",
-        "attempt": 1,
+        "attempt": 2,
         "reviewer": "ways-reviewer",
-        "digest": "c8233476d3b058f4a58bbeb29edc3ebbf0b14953ab574a288f0f6e3f2a18d937",
+        "digest": "7a7d47d123093af587c0f09495722b685883c8a9c1d1b352ff34ff300546348b",
         "verdict": "fail",
         "findings": [
           {
-            "id": "RR-002",
+            "id": "RR-005",
             "severity": "high",
-            "summary": "Integrated delegated task commits can mutate prior-attempt artifacts and still pass implementation certification; detection is deferred to history checking.",
+            "summary": "vitest.config.ts:5 does not constrain test discovery. QA confirmed that the canonical run discovers the 24 root suites plus unrelated suites from six nested living-memory worktrees, executing them against the root CLI and failing. Validation cannot reliably certify the active branch while delegated worktrees exist.",
             "disposition": "open"
           },
           {
-            "id": "RR-003",
+            "id": "RR-006",
             "severity": "high",
-            "summary": "Validation remediation evidence remains forgeable because its digest marker and formatted failure entries are self-attested rather than linked to a deterministically verifiable failed gate.",
+            "summary": "src/work/digest.ts:35 and :42 hash Git diff output without normalizing its format. With this machine's diff.mnemonicPrefix=true, workDigest emits c/w prefixes while committedWorkDigest emits a/b for identical content, rejecting authentic review remediation evidence. QA confirmed six failures in remediation, adversarial and repair tests; all 48 targeted tests pass with mnemonicPrefix=false.",
             "disposition": "open"
           }
         ]
       }
     },
-    "priorCheckpoint": "7ff3093bd4ea7c446c3da3bb3b833ec9e28cd185",
-    "attempt": 2,
-    "timestamp": "2026-09-04T06:20:49.836Z"
+    "priorCheckpoint": "5296b2552e8020494a0d4408cd70339265b5182f",
+    "attempt": 3,
+    "timestamp": "2026-09-11T17:39:13.398Z"
   }
 }

@@ -1,0 +1,35 @@
+{
+  "schemaVersion": 1,
+  "workId": "review-remediation",
+  "source": "review",
+  "target": "implement",
+  "reason": "RR-005-nested-test-discovery-and-RR-006-Git-dependent-review-digests",
+  "evidence": {
+    "kind": "review",
+    "review": {
+      "schemaVersion": 1,
+      "workId": "review-remediation",
+      "attempt": 2,
+      "reviewer": "ways-reviewer",
+      "digest": "7a7d47d123093af587c0f09495722b685883c8a9c1d1b352ff34ff300546348b",
+      "verdict": "fail",
+      "findings": [
+        {
+          "id": "RR-005",
+          "severity": "high",
+          "summary": "vitest.config.ts:5 does not constrain test discovery. QA confirmed that the canonical run discovers the 24 root suites plus unrelated suites from six nested living-memory worktrees, executing them against the root CLI and failing. Validation cannot reliably certify the active branch while delegated worktrees exist.",
+          "disposition": "open"
+        },
+        {
+          "id": "RR-006",
+          "severity": "high",
+          "summary": "src/work/digest.ts:35 and :42 hash Git diff output without normalizing its format. With this machine's diff.mnemonicPrefix=true, workDigest emits c/w prefixes while committedWorkDigest emits a/b for identical content, rejecting authentic review remediation evidence. QA confirmed six failures in remediation, adversarial and repair tests; all 48 targeted tests pass with mnemonicPrefix=false.",
+          "disposition": "open"
+        }
+      ]
+    }
+  },
+  "priorCheckpoint": "5296b2552e8020494a0d4408cd70339265b5182f",
+  "attempt": 3,
+  "timestamp": "2026-09-11T17:39:13.398Z"
+}
