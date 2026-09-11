@@ -1,0 +1,8 @@
+{
+  "digest": "c42fa98a83e2b3b6b68a1e871a0a4261a41ead6d4becd468504360e9831b9e04",
+  "findings": [],
+  "reviewer": "ways-reviewer",
+  "schemaVersion": 1,
+  "verdict": "pass",
+  "workId": "living-memory"
+}
