@@ -146,8 +146,9 @@ describe("baseline end-to-end coverage", () => {
 
   it("installs and checks the package from an npm pack tarball", async () => {
     const root = process.cwd();
-    const packed = JSON.parse(execFileSync("npm", ["pack", "--json"], { cwd: root, encoding: "utf8" })) as Array<{ filename: string }>;
-    const tarball = join(root, packed[0]!.filename);
+    const packDir = await mkdtemp(join(tmpdir(), "ways-pack-"));
+    const packed = JSON.parse(execFileSync("npm", ["pack", "--json", "--pack-destination", packDir], { cwd: root, encoding: "utf8" })) as Array<{ filename: string }>;
+    const tarball = join(packDir, packed[0]!.filename);
     const cwd = await mkdtemp(join(tmpdir(), "ways-pack-consumer-"));
     const git = new GitRepository(cwd);
     await git.run(["init", "-q"]);
