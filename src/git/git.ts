@@ -9,6 +9,10 @@ export interface CommitTrailers {
   state?: string;
   task?: string;
   attempt?: string;
+  /** Full motivating implementation range for a separate semantic-memory commit. */
+  implementation?: string;
+  /** Digest independently reviewed before a semantic-memory commit. */
+  memoryReviewDigest?: string;
 }
 
 export interface CommitInfo {
@@ -16,6 +20,13 @@ export interface CommitInfo {
   subject: string;
   body: string;
   trailers: CommitTrailers;
+}
+
+export interface GitTreeEntry {
+  mode: string;
+  type: "blob" | "commit";
+  object: string;
+  path: string;
 }
 
 export class GitError extends Error {
@@ -42,6 +53,18 @@ export class GitRepository {
     }
   }
 
+  async runBuffer(args: readonly string[]): Promise<Buffer> {
+    return new Promise((resolve, reject) => {
+      execFile("git", [...args], { cwd: this.cwd, encoding: "buffer", maxBuffer: 50 * 1024 * 1024 }, (error, stdout, stderr) => {
+        if (error) {
+          reject(new GitError(error.message, stderr.toString("utf8")));
+          return;
+        }
+        resolve(stdout);
+      });
+    });
+  }
+
   async root(): Promise<string> {
     return this.run(["rev-parse", "--show-toplevel"]);
   }
@@ -52,6 +75,64 @@ export class GitRepository {
 
   async parent(commit = "HEAD"): Promise<string> {
     return this.run(["rev-parse", `${commit}^`]);
+  }
+
+  async resolveRef(ref: string): Promise<string> {
+    return this.run(["rev-parse", "--verify", `${ref}^{commit}`]);
+  }
+
+  async parents(commit = "HEAD"): Promise<string[]> {
+    const fields = (await this.run(["show", "-s", "--format=%P", commit])).split(/\s+/).filter(Boolean);
+    return fields;
+  }
+
+  async isMergeCommit(commit = "HEAD"): Promise<boolean> {
+    return (await this.parents(commit)).length > 1;
+  }
+
+  async mergeBase(left: string, right: string): Promise<string> {
+    return this.run(["merge-base", left, right]);
+  }
+
+  async changedPathsBetween(from: string, to: string): Promise<string[]> {
+    const output = await this.run(["diff", "--no-renames", "--name-only", "-z", from, to, "--"]);
+    return output.split("\0").filter(Boolean).sort();
+  }
+
+  /** Compute Git's proposed merged tree without creating a commit or changing the worktree. */
+  async mergedTree(left: string, right: string): Promise<string> {
+    const output = await this.run(["merge-tree", "--write-tree", left, right]);
+    const tree = output.split("\n", 1)[0] ?? "";
+    if (!/^[a-f0-9]{40,64}$/.test(tree)) throw new GitError(`Unexpected merge-tree result: ${output}`);
+    return tree;
+  }
+
+  async treeId(ref = "HEAD"): Promise<string> {
+    return this.run(["rev-parse", "--verify", `${ref}^{tree}`]);
+  }
+
+  async treeEntries(ref = "HEAD"): Promise<GitTreeEntry[]> {
+    const output = await this.run(["ls-tree", "-rz", "--full-tree", "--format=%(objectmode) %(objecttype) %(objectname)%x09%(path)", ref]);
+    const entries: GitTreeEntry[] = [];
+    for (const record of output.split("\0").filter(Boolean)) {
+      const match = record.match(/^(\d+) (blob|commit) ([a-f0-9]+)\t([\s\S]+)$/);
+      if (!match?.[1] || !match[2] || !match[3] || !match[4]) throw new GitError(`Unexpected ls-tree record: ${record}`);
+      entries.push({ mode: match[1], type: match[2] as "blob" | "commit", object: match[3], path: match[4] });
+    }
+    return entries;
+  }
+
+  async objectBytes(object: string): Promise<Buffer> {
+    return this.runBuffer(["cat-file", "-p", object]);
+  }
+
+  async pathExists(ref: string, path: string): Promise<boolean> {
+    try {
+      await this.run(["cat-file", "-e", `${ref}:${path}`]);
+      return true;
+    } catch {
+      return false;
+    }
   }
 
   async status(): Promise<string[]> {
@@ -131,6 +212,8 @@ export function parseTrailers(body: string): CommitTrailers {
     "Harness-State": "state",
     "Harness-Task": "task",
     "Harness-Attempt": "attempt",
+    "Memory-Implementation": "implementation",
+    "Memory-Review-Digest": "memoryReviewDigest",
   };
 
   for (const line of body.split("\n")) {
@@ -150,6 +233,8 @@ export function formatTrailers(trailers: CommitTrailers): string {
     ["Harness-State", trailers.state],
     ["Harness-Task", trailers.task],
     ["Harness-Attempt", trailers.attempt],
+    ["Memory-Implementation", trailers.implementation],
+    ["Memory-Review-Digest", trailers.memoryReviewDigest],
   ];
   return entries.filter((entry): entry is [string, string] => Boolean(entry[1])).map(([key, value]) => `${key}: ${value}`).join("\n");
 }

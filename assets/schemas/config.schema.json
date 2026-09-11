@@ -13,6 +13,25 @@
       "items": { "type": "string", "minLength": 1 }
     },
     "defaultBranch": { "type": "string", "minLength": 1 },
-    "historySince": { "type": "string", "minLength": 7 }
+    "historySince": { "type": "string", "minLength": 7 },
+    "memory": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["releaseBranch", "reconciliationBranchPattern", "relevantPaths", "excludedPaths"],
+      "properties": {
+        "releaseBranch": { "type": "string", "minLength": 1 },
+        "integrationBranch": { "type": "string", "minLength": 1 },
+        "reconciliationBranchPattern": { "type": "string", "pattern": "^[^*]*\\*[^*]*$" },
+        "relevantPaths": {
+          "type": "array",
+          "minItems": 1,
+          "items": { "type": "string", "minLength": 1 }
+        },
+        "excludedPaths": {
+          "type": "array",
+          "items": { "type": "string", "minLength": 1 }
+        }
+      }
+    }
   }
 }

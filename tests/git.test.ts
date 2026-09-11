@@ -24,6 +24,23 @@ describe("GitRepository", () => {
     await expect(git.assertClean()).rejects.toBeInstanceOf(GitError);
   });
 
+  it("exposes exact tree and commit topology primitives", async () => {
+    const initial = await git.head();
+    const entries = await git.treeEntries(initial);
+    expect(entries.map((entry) => entry.path)).toEqual(["README.md"]);
+    expect((await git.objectBytes(entries[0]!.object)).toString()).toBe("initial\n");
+    expect(await git.resolveRef("HEAD")).toBe(initial);
+    expect(await git.parents()).toHaveLength(0);
+
+    await writeFile(join(cwd, "README.md"), "changed\n");
+    await git.run(["add", "."]);
+    await git.run(["commit", "-q", "-m", "change"]);
+    expect(await git.parents()).toEqual([initial]);
+    expect(await git.changedPathsBetween(initial, "HEAD")).toEqual(["README.md"]);
+    expect(await git.mergeBase(initial, "HEAD")).toBe(initial);
+    expect(await git.isMergeCommit()).toBe(false);
+  });
+
   it("creates and reads a commit with canonical trailers", async () => {
     await writeFile(join(cwd, "work.txt"), "done\n");
     await git.commit(["work.txt"], "feat: complete exploration", {

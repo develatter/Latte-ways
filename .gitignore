@@ -1,5 +1,6 @@
 node_modules/
 dist/
 coverage/
+.ways/indexes/
 *.log
 .DS_Store

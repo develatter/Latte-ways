@@ -10,5 +10,7 @@
 - Managed Git hooks: `.ways/hooks/`
 - Provider adapters rendered from the harness canonical source: `.claude/` and siblings
 - Plans and active SDD artifacts: `.ways/plans/`, `.ways/sdd/`
-- Current OKF knowledge and indexes: `.ways/knowledge/`, `.ways/indexes/`
+- Current OKF knowledge, coverage and watermark: `.ways/knowledge/`
+- Discovery, semantic reviews and release reconciliation evidence: `.ways/memory/`, `.ways/reconciliations/`
+- Disposable derived search cache: `.ways/indexes/`
 - Canonical local and CI check: `scripts/check.sh`

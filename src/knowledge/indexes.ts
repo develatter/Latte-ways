@@ -21,6 +21,10 @@ export interface KnowledgeIndexes {
   search: { schemaVersion: 1; terms: Record<string, string[]> };
 }
 
+function compare(a: string, b: string): number {
+  return a < b ? -1 : a > b ? 1 : 0;
+}
+
 function verificationEvents(value: unknown): Array<Record<string, unknown>> {
   if (Array.isArray(value)) return value.filter((item): item is Record<string, unknown> => Boolean(item) && typeof item === "object");
   return value && typeof value === "object" ? [value as Record<string, unknown>] : [];
@@ -56,24 +60,28 @@ export async function buildIndexes(cwd: string): Promise<KnowledgeIndexes> {
     description: typeof document.frontmatter.description === "string" ? document.frontmatter.description : "",
     status: typeof document.frontmatter.status === "string" ? document.frontmatter.status : "stable",
     trust: trust(document),
-    tags: Array.isArray(document.frontmatter.tags) ? document.frontmatter.tags.map(String).sort() : [],
-  })).sort((a, b) => a.id.localeCompare(b.id));
+    tags: Array.isArray(document.frontmatter.tags) ? document.frontmatter.tags.map(String).sort(compare) : [],
+  })).sort((a, b) => compare(a.id, b.id));
 
   const edges = documents.flatMap((document) => document.links.map((link) => targetId(document, link)).filter((id): id is string => Boolean(id)).map((to) => ({ from: document.id, to })))
-    .sort((a, b) => a.from.localeCompare(b.from) || a.to.localeCompare(b.to));
+    .sort((a, b) => compare(a.from, b.from) || compare(a.to, b.to));
   const inverted = new Map<string, string[]>();
   for (const document of documents) {
     for (const term of terms(document)) inverted.set(term, [...(inverted.get(term) ?? []), document.id]);
   }
-  const searchTerms = Object.fromEntries([...inverted.entries()].sort(([a], [b]) => a.localeCompare(b)).map(([term, ids]) => [term, ids.sort()]));
+  const searchTerms = Object.fromEntries([...inverted.entries()].sort(([a], [b]) => compare(a, b)).map(([term, ids]) => [term, ids.sort(compare)]));
   return { catalog: { schemaVersion: 1, documents: catalog }, graph: { schemaVersion: 1, edges }, search: { schemaVersion: 1, terms: searchTerms } };
+}
+
+async function persistIndexes(cwd: string, indexes: KnowledgeIndexes): Promise<void> {
+  await writeAtomic(join(cwd, INDEX_DIR, "catalog.json"), stableJson(indexes.catalog));
+  await writeAtomic(join(cwd, INDEX_DIR, "graph.json"), stableJson(indexes.graph));
+  await writeAtomic(join(cwd, INDEX_DIR, "search.json"), stableJson(indexes.search));
 }
 
 export async function writeIndexes(cwd: string): Promise<KnowledgeIndexes> {
   const indexes = await buildIndexes(cwd);
-  await writeAtomic(join(cwd, INDEX_DIR, "catalog.json"), stableJson(indexes.catalog));
-  await writeAtomic(join(cwd, INDEX_DIR, "graph.json"), stableJson(indexes.graph));
-  await writeAtomic(join(cwd, INDEX_DIR, "search.json"), stableJson(indexes.search));
+  await persistIndexes(cwd, indexes);
   return indexes;
 }
 
@@ -89,4 +97,30 @@ export async function indexesMatch(cwd: string): Promise<boolean> {
   } catch {
     return false;
   }
+}
+
+/** Return a fresh index, repairing the disposable on-disk cache when possible. */
+export async function loadIndexes(cwd: string): Promise<KnowledgeIndexes> {
+  const expected = await buildIndexes(cwd);
+  const names: Array<keyof KnowledgeIndexes> = ["catalog", "graph", "search"];
+  try {
+    const cached = await Promise.all(names.map((name) => readFile(join(cwd, INDEX_DIR, `${name}.json`), "utf8")));
+    const current = cached.every((content, index) => content === stableJson(expected[names[index]!]));
+    if (current) {
+      return {
+        catalog: JSON.parse(cached[0]!) as KnowledgeIndexes["catalog"],
+        graph: JSON.parse(cached[1]!) as KnowledgeIndexes["graph"],
+        search: JSON.parse(cached[2]!) as KnowledgeIndexes["search"],
+      };
+    }
+  } catch {
+    // A missing or unreadable cache is equivalent to no cache.
+  }
+
+  try {
+    await persistIndexes(cwd, expected);
+  } catch {
+    // Queries must still work when the disposable cache location is read-only.
+  }
+  return expected;
 }

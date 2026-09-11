@@ -32,11 +32,10 @@ export async function startQuick(cwd: string, id: string): Promise<WorkState> {
   return state;
 }
 
-export async function finishQuick(cwd: string, subject: string, memory: "updated" | "unchanged"): Promise<string> {
+export async function finishQuick(cwd: string, subject: string, _legacyMemoryDisposition?: "updated" | "unchanged"): Promise<string> {
   const state = await loadState(cwd);
   if (!state || state.mode !== "quick" || state.status !== "active") throw new Error("No active quick work");
   if (!subject.trim()) throw new Error("A concise commit message is required");
-  if (memory !== "updated" && memory !== "unchanged") throw new Error("Memory disposition must be updated or unchanged");
 
   const checks = await runChecks(cwd);
   if (checks.issues.length > 0) throw new Error(checks.issues.map((issue) => `${issue.path}: ${issue.message}`).join("\n"));

@@ -17,7 +17,7 @@ import { startSdd } from "../src/work/sdd.js";
 import { prepareTask } from "../src/work/tasks.js";
 
 const ROLES = ["explorer", "implementer", "reviewer", "qa", "sweeper"];
-const COMMANDS = ["status", "query", "quick", "plan", "sdd"];
+const COMMANDS = ["status", "query", "quick", "plan", "sdd", "memory"];
 
 async function repository(): Promise<{ cwd: string; git: GitRepository }> {
   const cwd = await mkdtemp(join(tmpdir(), "ways-adapter-"));
@@ -37,6 +37,8 @@ describe("canonical adapter source", () => {
     expect(source.roles.map((role) => role.name).sort()).toEqual([...ROLES].sort());
     expect(source.commands.map((command) => command.name).sort()).toEqual([...COMMANDS].sort());
     for (const role of source.roles) expect(nonEmptyLines(role.body).length).toBeLessThanOrEqual(MAX_ROLE_LINES);
+    expect(source.commands.find((command) => command.name === "memory")?.body).toContain("memory reconcile inspect");
+    expect(source.roles.find((role) => role.name === "implementer")?.body).toContain("durable semantic impact");
     expect(source.roles.filter((role) => role.access === "read").map((role) => role.name).sort()).toEqual(["explorer", "reviewer"]);
   });
 

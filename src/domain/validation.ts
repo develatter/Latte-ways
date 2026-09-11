@@ -2,9 +2,10 @@ import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import type { AnySchema, ErrorObject, ValidateFunction } from "ajv";
 import { Ajv2020 } from "ajv/dist/2020.js";
+import type { CoverageArea, MemorySource, MemoryState, ReconciliationEvidence } from "../memory/model.js";
 import type { ApprovalRecord, HarnessConfig, ManagedManifest, RemediationRecord, ReviewResult, ValidationFailureRecord, WorkState } from "./types.js";
 
-type SchemaName = "config" | "manifest" | "state" | "task" | "review" | "approval" | "remediation" | "validation-failure";
+type SchemaName = "config" | "manifest" | "state" | "task" | "review" | "approval" | "remediation" | "validation-failure" | "coverage" | "memory-source" | "memory-state" | "reconciliation";
 
 export interface ValidationResult {
   valid: boolean;
@@ -59,6 +60,10 @@ const validators: Record<Exclude<SchemaName, "task">, ValidateFunction> = {
   approval: ajv.compile(loadSchema("approval")),
   remediation: ajv.getSchema("https://latte-ways.dev/schemas/remediation-v1.json")!,
   "validation-failure": ajv.getSchema("https://latte-ways.dev/schemas/validation-failure-v1.json")!,
+  coverage: ajv.compile(loadSchema("coverage")),
+  "memory-source": ajv.compile(loadSchema("memory-source")),
+  "memory-state": ajv.compile(loadSchema("memory-state")),
+  reconciliation: ajv.compile(loadSchema("reconciliation")),
 };
 
 function formatErrors(errors: ErrorObject[] | null | undefined): string[] {
@@ -97,6 +102,22 @@ export function validateRemediation(value: unknown): value is RemediationRecord 
 
 export function validateValidationFailure(value: unknown): value is ValidationFailureRecord {
   return validate("validation-failure", value).valid;
+}
+
+export function validateCoverage(value: unknown): value is CoverageArea {
+  return validate("coverage", value).valid;
+}
+
+export function validateMemorySource(value: unknown): value is MemorySource & { revision: string } {
+  return validate("memory-source", value).valid;
+}
+
+export function validateMemoryState(value: unknown): value is MemoryState {
+  return validate("memory-state", value).valid;
+}
+
+export function validateReconciliation(value: unknown): value is ReconciliationEvidence {
+  return validate("reconciliation", value).valid;
 }
 
 export function validationDetails(name: keyof typeof validators, value: unknown): ValidationResult {

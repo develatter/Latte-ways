@@ -54,11 +54,10 @@ export async function proposePlan(cwd: string): Promise<string> {
   });
 }
 
-export async function finishPlan(cwd: string, subject: string, memory: "updated" | "unchanged"): Promise<string> {
+export async function finishPlan(cwd: string, subject: string, _legacyMemoryDisposition?: "updated" | "unchanged"): Promise<string> {
   const state = await loadState(cwd);
   if (!state || state.mode !== "plan" || !state.planPath) throw new Error("No active plan");
   if (!subject.trim()) throw new Error("A concise commit message is required");
-  if (memory !== "updated" && memory !== "unchanged") throw new Error("Memory disposition must be updated or unchanged");
   const checks = await runChecks(cwd);
   if (checks.issues.length > 0 || checks.testExitCode !== 0) throw new Error("Checks failed; plan cannot close");
   await rm(join(cwd, state.planPath), { force: true });
