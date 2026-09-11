@@ -1,0 +1,15 @@
+{
+  "schemaVersion": 1,
+  "harnessVersion": "0.1.0",
+  "id": "living-memory",
+  "mode": "sdd",
+  "status": "active",
+  "profile": "autonomous",
+  "phase": "explore",
+  "baseCommit": "e10d9fec5b7dec6283c56c4354d7798ff56c675f",
+  "gateCommit": "e10d9fec5b7dec6283c56c4354d7798ff56c675f",
+  "createdAt": "2026-09-11T19:28:55.389Z",
+  "updatedAt": "2026-09-11T19:29:03.039Z",
+  "tasks": [],
+  "lastCompletedPhase": "intake"
+}

@@ -1,5 +1,12 @@
 {
   "schemaVersion": 1,
-  "active": false,
-  "updatedAt": "2026-09-11T18:31:55.168Z"
+  "active": true,
+  "mode": "sdd",
+  "id": "living-memory",
+  "status": "active",
+  "gateCommit": "e10d9fec5b7dec6283c56c4354d7798ff56c675f",
+  "updatedAt": "2026-09-11T19:29:03.039Z",
+  "phase": "explore",
+  "humanGate": false,
+  "profile": "autonomous"
 }
