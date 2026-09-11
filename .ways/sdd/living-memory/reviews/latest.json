@@ -1,0 +1,21 @@
+{
+  "digest": "54c4a22470fd233b9cc5b7aeddf0fcd1efaf4c9b4ee0d738a8a837e45ab4e095",
+  "findings": [
+    {
+      "disposition": "deferred",
+      "id": "LM-001",
+      "severity": "medium",
+      "summary": "Vitest discovers nested delegated worktrees: vitest.config.ts has no include/exclude, so all 6 .ways/worktrees/living-memory/* checkouts (138 nested suites, 535 cases via vitest list) fan out into every run; a targeted 6-file run executed 33 files (119 tests). Main-only runs with --exclude pass; CI fresh clones are unaffected (worktrees are gitignored). Fix by adding include/exclude for .ways/worktrees."
+    },
+    {
+      "disposition": "deferred",
+      "id": "LM-002",
+      "severity": "medium",
+      "summary": "baseline-e2e npm-pack test leaves an untracked tarball in the repo root that enters workDigest and shifts the review digest: digest moved c8576808... to 54c4a22... after the verification run left develatter-latte-ways-0.1.2.tgz (114980 bytes). Tests/baseline-e2e.test.ts runs npm pack in process.cwd() with no cleanup; workDigest hashes all untracked files. Fix by packing in a tmpdir or removing the tarball."
+    }
+  ],
+  "reviewer": "ways-reviewer",
+  "schemaVersion": 1,
+  "verdict": "pass",
+  "workId": "living-memory"
+}
