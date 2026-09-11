@@ -28,11 +28,14 @@ const DIGEST_EXCLUDES = [
   `:(exclude,glob)${SDD_DIR}/*/attempts/*/reviews/**`,
 ];
 
-// Mnemonic prefixes differ between worktree and tree comparisons (c/w vs a/b).
-// Pin the ordinary prefixes without changing historical diff algorithms or hunks.
+// Mnemonic prefixes differ between worktree and tree comparisons (c/w vs a/b),
+// and diff.algorithm comes from the surrounding git config (histogram here,
+// myers on fresh runners). Pin both without changing historical hunks so a
+// digest recorded on one machine replays on any other.
 const DIGEST_DIFF = [
   "diff", "--binary", "--no-color", "--no-ext-diff",
   "--src-prefix=a/", "--dst-prefix=b/",
+  "--diff-algorithm=histogram",
 ];
 
 /** Deterministic digest between two committed trees, with optional transition-only paths omitted. */

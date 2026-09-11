@@ -78,7 +78,9 @@ export async function reconciliationReviewDigest(
   reconcile: string,
   evidence: ReconciliationEvidence,
 ): Promise<string> {
-  const diff = await git.runBuffer(["diff", "--binary", "--no-color", "--no-ext-diff", "--no-renames", candidate, reconcile, "--"]);
+  // Pinned prefixes and algorithm: this diff is hashed into the review digest,
+  // so it must replay identically under any surrounding git config.
+  const diff = await git.runBuffer(["diff", "--binary", "--no-color", "--no-ext-diff", "--no-renames", "--src-prefix=a/", "--dst-prefix=b/", "--diff-algorithm=histogram", candidate, reconcile, "--"]);
   return createHash("sha256").update(stableEvidencePayload(evidence)).update("\0").update(diff).digest("hex");
 }
 

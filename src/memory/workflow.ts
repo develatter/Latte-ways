@@ -221,7 +221,9 @@ export async function memoryCommitReviewDigest(cwd: string, implementationRange:
   await assertSemanticMemoryValid(cwd, range.to);
   const git = new GitRepository(cwd);
   const config = effectiveMemoryConfig(await loadConfig(cwd));
-  const diff = await git.runBuffer(["diff", "--binary", "--no-color", "HEAD", "--", KNOWLEDGE_DIR]);
+  // Pinned prefixes and algorithm: this diff is hashed into the review digest,
+  // so it must replay identically under any surrounding git config.
+  const diff = await git.runBuffer(["diff", "--binary", "--no-color", "--no-ext-diff", "--src-prefix=a/", "--dst-prefix=b/", "--diff-algorithm=histogram", "HEAD", "--", KNOWLEDGE_DIR]);
   const untracked = new Set((await git.run(["ls-files", "--others", "--exclude-standard", "--", KNOWLEDGE_DIR])).split("\n").filter(Boolean));
   const untrackedParts: Array<string | Buffer> = [];
   for (const path of paths.filter((path) => untracked.has(path)).sort()) untrackedParts.push(path, await readFile(join(cwd, path)));

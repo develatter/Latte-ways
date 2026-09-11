@@ -6,7 +6,7 @@ import { expect, it } from "vitest";
 import { GitRepository } from "../src/git/git.js";
 import { committedWorkDigest, workDigest } from "../src/work/digest.js";
 
-it.each(["myers", "histogram"])("preserves %s digests across prefix settings and commit boundaries", async (algorithm) => {
+it.each(["myers", "histogram"])("preserves digests across %s ambient algorithm and prefix settings", async (algorithm) => {
   const cwd = await mkdtemp(join(tmpdir(), "ways-digest-"));
   const git = new GitRepository(cwd);
   await git.run(["init", "-q"]);
@@ -19,9 +19,13 @@ it.each(["myers", "histogram"])("preserves %s digests across prefix settings and
   await git.commit(["content.txt"], "base", {});
   const base = await git.head();
   await writeFile(join(cwd, "content.txt"), "one\nTWO\nthree\n");
-  const ordinary = await git.run(["diff", "--binary", "--no-color", "--no-ext-diff", base]);
-  const expected = createHash("sha256").update(ordinary).digest("hex");
+  // Reference digest with explicitly pinned settings: whatever the ambient
+  // git config is, the harness digest must equal this, so a digest recorded
+  // on one machine replays on any other.
+  const canonical = await git.run(["diff", "--binary", "--no-color", "--no-ext-diff", "--src-prefix=a/", "--dst-prefix=b/", "--diff-algorithm=histogram", base]);
+  const expected = createHash("sha256").update(canonical).digest("hex");
   expect(await workDigest(cwd, base)).toBe(expected);
+  await git.run(["config", "diff.algorithm", algorithm === "myers" ? "histogram" : "myers"]);
   await git.run(["config", "diff.mnemonicPrefix", "true"]);
   expect(await workDigest(cwd, base)).toBe(expected);
   await git.run(["config", "diff.noprefix", "true"]);
