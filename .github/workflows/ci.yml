@@ -34,6 +34,7 @@ jobs:
           registry-url: https://npm.pkg.github.com
           scope: '@develatter'
       - run: npm ci
+      - run: npm run build
       - name: Publish if version is new
         env:
           NODE_AUTH_TOKEN: ${{ secrets.GITHUB_TOKEN }}

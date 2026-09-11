@@ -1,6 +1,6 @@
 {
   "name": "@develatter/latte-ways",
-  "version": "0.2.0",
+  "version": "0.2.1",
   "description": "A minimal, agent-agnostic development harness with Git-backed workflows and living OKF memory",
   "type": "module",
   "bin": {
