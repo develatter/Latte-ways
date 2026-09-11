@@ -1,6 +1,0 @@
-# explore
-
-Goal: Inventory master(e10d9fe)..development(02f2e00) excluding .ways: what the memory feature adds vs what the new harness owns.
-Evidence: Hunk analysis base(51d3090)->each side with -U0 overlap: 24 added (src/memory/*, memory schemas, LIVING_MEMORY/BRANCH_PROTECTION docs, memory adapters/tests), 10 deleted (all new-harness: remediation/validation-failure/attempt files, keep master), 97 modified = 51 dev-only (take, but rendered .claude/.cursor/.codex/.pi/.agents regenerate from canonical assets), 12 disjoint (apply dev hunks: cli.ts, types.ts, git.ts, integrity.ts, README, sdd adapters, adapter/git tests), 32 harness-only (keep master), 2 overlapping (src/domain/validation.ts 7v4, tests/validation.test.ts 4v2, manual). API gaps on master to fill via port: GitTreeEntry (git.ts hunks), validateCoverage (conflict file), MemoryConfig (types.ts hunks), effectiveMemoryConfig (config.ts take); reviewBlocks and validationDetails present.
-Decision: Port = 24 A + 51 dev-only takes (minus rendered) + 12 hunk applies + 2 manual resolutions; zero deletions of harness files; adapters regenerated, never hand-ported.
-Gate: Inventory exact and API gaps named; proceed to assess scope and downgrade options.
