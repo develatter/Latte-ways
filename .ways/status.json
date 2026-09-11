@@ -4,9 +4,9 @@
   "mode": "sdd",
   "id": "living-memory",
   "status": "active",
-  "gateCommit": "cc34164bec44d8a934441e396593ed30cf723374",
-  "updatedAt": "2026-09-11T19:47:49.607Z",
-  "phase": "reconcile-memory",
+  "gateCommit": "b4de0b8c49a99b67f159eef68b23aca761146f4f",
+  "updatedAt": "2026-09-11T19:48:06.819Z",
+  "phase": "close",
   "humanGate": false,
   "profile": "autonomous"
 }
