@@ -1,6 +1,6 @@
-#!/usr/bin/env bash
-set -euo pipefail
-if [[ -f dist/cli.js ]]; then
+#!/usr/bin/env sh
+set -eu
+if [ -f dist/cli.js ]; then
   node dist/cli.js check
   exec node dist/cli.js check --history
 fi
