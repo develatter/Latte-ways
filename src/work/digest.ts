@@ -28,18 +28,25 @@ const DIGEST_EXCLUDES = [
   `:(exclude,glob)${SDD_DIR}/*/attempts/*/reviews/**`,
 ];
 
+// Mnemonic prefixes differ between worktree and tree comparisons (c/w vs a/b).
+// Pin the ordinary prefixes without changing historical diff algorithms or hunks.
+const DIGEST_DIFF = [
+  "diff", "--binary", "--no-color", "--no-ext-diff",
+  "--src-prefix=a/", "--dst-prefix=b/",
+];
+
 /** Deterministic digest between two committed trees, with optional transition-only paths omitted. */
 export async function committedWorkDigest(git: GitRepository, since: string, ref: string, omitted: readonly string[] = []): Promise<string> {
   const excludes = [...DIGEST_EXCLUDES, ...omitted.map((path) => `:(exclude)${path}`)];
   const hash = createHash("sha256");
-  hash.update(await git.run(["diff", "--binary", "--no-color", "--no-ext-diff", since, ref, "--", ".", ...excludes]));
+  hash.update(await git.run([...DIGEST_DIFF, since, ref, "--", ".", ...excludes]));
   return hash.digest("hex");
 }
 
 export async function workDigest(cwd: string, since: string): Promise<string> {
   const git = new GitRepository(cwd);
   const hash = createHash("sha256");
-  hash.update(await git.run(["diff", "--binary", "--no-color", "--no-ext-diff", since, "--", ".", ...DIGEST_EXCLUDES]));
+  hash.update(await git.run([...DIGEST_DIFF, since, "--", ".", ...DIGEST_EXCLUDES]));
   const untracked = (await git.run(["ls-files", "--others", "--exclude-standard"])).split("\n").filter((path) => path && !isBookkeeping(path)).sort();
   for (const path of untracked) {
     hash.update(`\0${path}\0`);

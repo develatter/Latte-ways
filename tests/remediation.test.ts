@@ -144,6 +144,17 @@ async function expectTransition(cwd: string, git: GitRepository, source: "review
 }
 
 describe("SDD remediation transitions", { timeout: 120_000 }, () => {
+  it("accepts authentic failed-review remediation with mnemonic Git prefixes", async () => {
+    const fixture = await reviewRepository();
+    const review = JSON.parse(await readFile(join(fixture.cwd, fixture.reviewPath), "utf8"));
+    // Pin the ordinary prefixes first so the baseline is independent of ambient Git config.
+    await fixture.git.run(["config", "diff.mnemonicPrefix", "false"]);
+    expect(await reviewDigest(fixture.cwd)).toBe(review.digest);
+    await fixture.git.run(["config", "diff.mnemonicPrefix", "true"]);
+    expect(await reviewDigest(fixture.cwd)).toBe(review.digest);
+    await expectTransition(fixture.cwd, fixture.git, "review", "implement", fixture.prior);
+  });
+
   for (const source of ["review", "validate"] as const) {
     for (const target of targets) {
       it(`${source} -> ${target} is additive and evidence gated`, async () => {
