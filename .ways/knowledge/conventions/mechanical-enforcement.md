@@ -15,7 +15,7 @@ sources:
 Compliance never depends on an agent obeying its prompt. Three layers make it mechanical:
 
 - The managed `commit-msg` hook rejects any commit not traced to the active work. Closing commits must stage the deletion of the state file.
-- `ways check --history` audits every commit after the anchor for `Harness-Work` plus `Harness-State` or `Harness-Task`, and verifies SDD certification chains. CI runs it, so `--no-verify` is caught later.
+- `ways check --history` audits every commit after the anchor for `Harness-Work` and verifies SDD certification chains. Inline implementation commits carry only the work trailer, and separately reviewed semantic-memory commits add `Harness-State: memory`; CI runs the audit, so `--no-verify` is caught later.
 - `.ways/status.json` is a derived projection of the active state, verified by integrity and readable by any agent statusline. Remediation attempts add `attempt` and immutable remediation metadata; attempt zero keeps the original status shape.
 
 Flexible means choosing the ceremony (`quick`, `plan`, `sdd`), never skipping it. Every change opens `quick` at minimum.

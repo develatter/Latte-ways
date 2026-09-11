@@ -74,8 +74,11 @@ export function replayCommits(commits: readonly CommitInfo[], activeId?: string)
 
   for (const commit of commits) {
     const { work, phase, state } = commit.trailers;
-    if (!work || (!state && !commit.trailers.task)) {
-      issue(issues, commit, "history-untraced", `Commit "${commit.subject}" lacks Harness-Work with Harness-State or Harness-Task trailers`);
+    // Harness-Work alone traces a commit: inline implementation and semantic-memory
+    // commits are not SDD transitions, so they carry no state or task. SDD commits
+    // are still replayed strictly below; unrecognized states are ignored.
+    if (!work) {
+      issue(issues, commit, "history-untraced", `Commit "${commit.subject}" lacks a Harness-Work trailer`);
       continue;
     }
     if (state === "opened") opened.set(work, commit.hash.slice(0, 12));

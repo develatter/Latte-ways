@@ -248,6 +248,14 @@ describe("history verification", () => {
     const codes = (await checkIntegrity(cwd)).map((issue) => issue.code);
     expect(codes).toContain("work-untraced");
   });
+
+  it("traces inline implementation commits that carry only Harness-Work", async () => {
+    const { cwd, git } = await repository();
+    await startQuick(cwd, "inline-quick");
+    await writeFile(join(cwd, "inline.txt"), "inline\n");
+    await git.commit(["inline.txt"], "feat: inline", { work: "inline-quick" });
+    expect(await checkHistory(cwd)).toEqual([]);
+  });
 });
 
 describe("delegated execution", () => {

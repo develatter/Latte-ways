@@ -259,6 +259,7 @@ export async function commitMemory(cwd: string, implementationRange: string, rev
   const git = new GitRepository(cwd);
   return git.commit([...paths, evidencePath], subject.trim(), {
     work: work.id,
+    state: "memory",
     implementation: `${range.from}..${range.to}`,
     memoryReviewDigest: review.digest,
   });

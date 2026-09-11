@@ -125,6 +125,7 @@ describe("incremental memory commit", () => {
     const commit = await commitMemory(cwd, range, review, "docs(memory): describe runtime");
     const info = await git.commitInfo(commit);
     expect(info.trailers.work).toBe("semantic-change");
+    expect(info.trailers.state).toBe("memory");
     expect(info.trailers.implementation).toBe(range);
     expect(info.trailers.memoryReviewDigest).toBe(digest);
     expect(await git.changedPathsBetween(to, commit)).toEqual([

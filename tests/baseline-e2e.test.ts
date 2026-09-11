@@ -5,6 +5,7 @@ import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 import { bootstrap } from "../src/bootstrap/bootstrap.js";
 import { GitRepository } from "../src/git/git.js";
+import { checkHistory } from "../src/integrity/history.js";
 import { discoveryReviewDigest, completeDiscovery, commitMemory, memoryCommitReviewDigest, MEMORY_STATE_PATH } from "../src/memory/workflow.js";
 import { inspectReconciliationCandidate, reconciliationReviewDigest, validateBackSyncMerge, validatePublicationMerge, type ReconciliationRequest } from "../src/memory/reconciliation.js";
 import { queryKnowledgeResult } from "../src/query/query.js";
@@ -82,6 +83,7 @@ describe("baseline end-to-end coverage", () => {
     await writeFile(join(cwd, "src/runtime.ts"), "export const runtime = 2;\n");
     await git.commit(["src/runtime.ts"], "feat: update runtime", { work: "runtime-change" });
     const to = await git.head();
+    expect(await checkHistory(cwd)).toEqual([]);
 
     await writeFile(runtimeDoc, `---\ntype: component\nstatus: stable\nverified: { by: process:baseline-review, at: 2026-09-03T00:00:00Z }\nsources:\n  - { resource: /src/runtime.ts, revision: ${to} }\n---\n\n# Runtime\nThe runtime export now reflects the implemented change.\n`);
     const memoryDigest = await memoryCommitReviewDigest(cwd, `${from}..${to}`);
@@ -95,6 +97,7 @@ describe("baseline end-to-end coverage", () => {
     expect(memoryInfo.trailers.implementation).toBe(`${from}..${to}`);
     expect(memoryInfo.trailers.memoryReviewDigest).toBe(memoryDigest);
     await rm(memoryReview, { force: true });
+    expect(await checkHistory(cwd)).toEqual([]);
 
     const stale = await queryKnowledgeResult(cwd, "runtime");
     expect(stale.warnings[0]).toContain("Memory may be stale");
