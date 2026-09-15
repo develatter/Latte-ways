@@ -1,7 +1,7 @@
 import { readFile } from "node:fs/promises";
 import { join } from "node:path";
 import { MANIFEST_PATH, STATE_PATH } from "../domain/constants.js";
-import { lifecycleContract, type LifecycleContract } from "../domain/lifecycle.js";
+import { lifecycleContract, recordVersion, type LifecycleContract } from "../domain/lifecycle.js";
 import type { RemediationRecord, RemediationTarget, SddPhase } from "../domain/types.js";
 import { validateRemediation, validationDetails, validateState } from "../domain/validation.js";
 import { loadConfig } from "../config/config.js";
@@ -151,8 +151,10 @@ export function replayCommits(
       });
       continue;
     }
-
     if (state !== "completed") continue;
+    // Quick/plan completion commits carry Harness-State but no SDD phase.
+    // They are traced history, not lifecycle certifications.
+    if (phase === undefined) continue;
     if (!contract.isPhase(phase)) {
       issue(issues, commit, "history-broken-chain", `Certification of ${String(phase)} for ${work} uses an unrecognized SDD phase`);
       continue;
@@ -213,12 +215,21 @@ async function hydrateLegacyRemediations(
     try {
       const path = remediationRecordPath(commit.trailers.work, attempt);
       const value: unknown = JSON.parse(await git.run(["show", `${commit.hash}:${path}`]));
-      if (!validateRemediation(value) || value.workId !== commit.trailers.work || value.attempt !== attempt) return commit;
+      const details = validationDetails("remediation", value);
+      if (!details.valid) {
+        if (details.errors.some((error) => error.includes("unsupported lifecycle contract version"))) {
+          recordVersion(value, `legacy remediation record at ${path}`);
+        }
+        return commit;
+      }
+      if (!validateRemediation(value)) return commit;
+      if (value.workId !== commit.trailers.work || value.attempt !== attempt) return commit;
       return {
         ...commit,
         trailers: { ...commit.trailers, phase: value.source, state: `remediated-${value.target}` },
       };
-    } catch {
+    } catch (error) {
+      if (error instanceof Error && error.message.includes("unsupported lifecycle contract version")) throw error;
       return commit;
     }
   }));
