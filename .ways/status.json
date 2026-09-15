@@ -4,9 +4,9 @@
   "mode": "sdd",
   "id": "prefactor-workflow-contracts",
   "status": "active",
-  "gateCommit": "5ec67d6fa701261079e4e4fcdc24e19eba247383",
-  "updatedAt": "2026-09-15T19:44:05.721Z",
-  "phase": "explore",
+  "gateCommit": "76a7e3e616cf841cbf2a29225905cdb450dd0afa",
+  "updatedAt": "2026-09-15T19:45:18.011Z",
+  "phase": "assess",
   "humanGate": false,
   "profile": "autonomous"
 }
