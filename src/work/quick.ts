@@ -1,6 +1,6 @@
 import { HARNESS_VERSION } from "../index.js";
 import type { WorkState } from "../domain/types.js";
-import { runChecks } from "../check/check.js";
+import { failedCheckDetails, runChecks } from "../check/check.js";
 import { GitRepository } from "../git/git.js";
 import { loadState, removeState, saveState } from "../state/store.js";
 import { closeWork } from "./close.js";
@@ -39,7 +39,9 @@ export async function finishQuick(cwd: string, subject: string, _legacyMemoryDis
 
   const checks = await runChecks(cwd);
   if (checks.issues.length > 0) throw new Error(checks.issues.map((issue) => `${issue.path}: ${issue.message}`).join("\n"));
-  if (checks.testExitCode !== 0) throw new Error(`Tests failed with exit code ${checks.testExitCode}`);
+  const namedFailures = failedCheckDetails(checks);
+  if (namedFailures.length > 0) throw new Error(namedFailures.join("\n"));
+  if (!checks.checks && checks.testExitCode !== 0) throw new Error(`Tests failed with exit code ${checks.testExitCode}`);
 
   return closeWork(cwd, subject.trim(), { work: state.id, state: "completed" });
 }

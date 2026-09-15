@@ -13,8 +13,9 @@ import { checkHistory } from "./integrity/history.js";
 import { stableJson, writeAtomic } from "./fs/files.js";
 import { HARNESS_NAME, HARNESS_VERSION } from "./index.js";
 import { writeIndexes } from "./knowledge/indexes.js";
-import { inspectOkf } from "./knowledge/okf.js";
 import type { MemoryState, ReconciliationEvidence } from "./memory/model.js";
+import { inspectOkf } from "./knowledge/okf.js";
+import type { NamedChecksConfig } from "./domain/types.js";
 import {
   inspectReconciliationCandidate,
   validateBackSyncMerge,
@@ -250,6 +251,7 @@ export async function run(argv: readonly string[], cwd = process.cwd()): Promise
     }
     const result = await runChecks(cwd, args.includes("--integrity-only"));
     for (const issue of result.issues) console.error(`${issue.code}: ${issue.path}: ${issue.message}`);
+    if (result.checks) console.log(JSON.stringify({ checks: result.checks }));
     if (result.issues.length > 0 || (result.testExitCode !== undefined && result.testExitCode !== 0)) return 1;
     console.log("Checks passed.");
     return 0;
@@ -401,12 +403,15 @@ export async function run(argv: readonly string[], cwd = process.cwd()): Promise
     if (!Array.isArray(testCommand) || !testCommand.every((part) => typeof part === "string")) {
       throw new Error("--test-command must be a JSON string array");
     }
+    const commandsArg = args.find((arg) => arg.startsWith("--commands="));
+    const commands = commandsArg === undefined ? undefined : JSON.parse(commandsArg.slice("--commands=".length)) as unknown;
     const relevantPaths = options(args, "--relevant-path");
     const excludedPaths = options(args, "--exclude-path");
     const integrationBranch = option(args, "--integration-branch");
     await bootstrap({
       cwd,
       testCommand,
+      ...(commandsArg === undefined ? {} : { commands: commands as NamedChecksConfig }),
       force,
       adapters: !args.includes("--no-adapters"),
       memory: {

@@ -30,6 +30,13 @@ scripts/check.sh
 
 Bootstrap creates the repository contract, including `AGENTS.md`, `MAP.md`, `.ways/`, `scripts/check.sh`, a `CLAUDE.md` symlink to `AGENTS.md`, the managed `commit-msg` hook, and the adapter files for every supported agent (Claude Code, Codex, Cursor, pi). Commit the result; from then on the agent you talk to follows the harness.
 
+To configure multiple reproducible environment checks, pass a JSON command contract. Each command is an argument array; only names listed in `required` execute, in the stable order `test`, `lint`, `typecheck`, `build`, `e2e`. A missing required command is reported as unavailable, while non-required checks are skipped. The legacy `testCommand` remains the fallback:
+
+```bash
+npx ways bootstrap --test-command='["npm","test"]' \
+  --commands='{"test":["npm","test"],"lint":["npm","run","lint"],"required":["test","lint"],"timeoutMs":120000}'
+```
+
 ## Using the harness day to day
 
 You never need the CLI: you talk to your coding agent and it drives `ways` for you. The commands below are the same in every agent, only the invocation prefix changes (see the provider table).

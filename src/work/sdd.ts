@@ -1,7 +1,7 @@
 import { mkdir, readFile, rm } from "node:fs/promises";
 import { join } from "node:path";
 import { HARNESS_VERSION } from "../index.js";
-import { runChecks } from "../check/check.js";
+import { failedCheckDetails, runChecks } from "../check/check.js";
 import { PLAN_DIR, SDD_DIR, STATE_PATH } from "../domain/constants.js";
 import { SDD_PHASES, type ApprovalProfile, type ExecutionMode, type SddPhase, type WorkState } from "../domain/types.js";
 import { validateState } from "../domain/validation.js";
@@ -177,7 +177,10 @@ export async function advanceSdd(cwd: string): Promise<string> {
   if (state.phase === "review") await assertReviewPassed(cwd, state);
   if (state.phase === "validate" || state.phase === "close") {
     const checks = await runChecks(cwd);
-    if (checks.issues.length > 0 || checks.testExitCode !== 0) throw new Error(`Checks failed during ${state.phase}`);
+    const failures = failedCheckDetails(checks);
+    if (checks.issues.length > 0 || failures.length > 0 || (!checks.checks && checks.testExitCode !== 0)) {
+      throw new Error(failures.length > 0 ? failures.join("\n") : `Checks failed during ${state.phase}`);
+    }
   }
 
   const git = new GitRepository(cwd);
