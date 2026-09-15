@@ -1,5 +1,12 @@
 {
   "schemaVersion": 1,
-  "active": false,
-  "updatedAt": "2026-09-11T19:48:50.727Z"
+  "active": true,
+  "mode": "sdd",
+  "id": "issue-11-named-checks",
+  "status": "active",
+  "gateCommit": "854eb5a59c5fddada06ae6708af86bdc7bf2b400",
+  "updatedAt": "2026-09-15T07:02:39.255Z",
+  "phase": "explore",
+  "humanGate": false,
+  "profile": "autonomous"
 }
