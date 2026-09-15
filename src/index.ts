@@ -2,6 +2,7 @@ export const HARNESS_NAME = "ways";
 export const HARNESS_VERSION = "0.2.0";
 
 export * from "./domain/types.js";
+export * from "./domain/lifecycle.js";
 export * from "./domain/validation.js";
 export * from "./git/git.js";
 export * from "./memory/model.js";

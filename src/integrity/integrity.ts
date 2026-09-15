@@ -1,8 +1,9 @@
 import { lstat, readFile, readlink } from "node:fs/promises";
 import { join } from "node:path";
 import { CONFIG_PATH, KNOWLEDGE_DIR, MANIFEST_PATH, STATE_PATH, STATUS_PATH } from "../domain/constants.js";
+import { recordVersion } from "../domain/lifecycle.js";
 import type { ManagedManifest, WorkState } from "../domain/types.js";
-import { validateConfig, validateManifest, validateRemediation, validateState } from "../domain/validation.js";
+import { validateConfig, validateManifest, validateRemediation, validationDetails, validateState } from "../domain/validation.js";
 import { sha256 } from "../fs/files.js";
 import { inspectOkf } from "../knowledge/okf.js";
 import { GitRepository } from "../git/git.js";
@@ -83,9 +84,9 @@ export async function checkIntegrity(cwd: string): Promise<IntegrityIssue[]> {
     try {
       const value = await readJson(join(cwd, STATE_PATH));
       if (validateState(value)) activeState = value;
-      else issues.push({ code: "invalid-state", path: STATE_PATH, message: "Active state does not match its schema" });
-    } catch {
-      issues.push({ code: "invalid-state", path: STATE_PATH, message: "Active state is unreadable" });
+      else issues.push({ code: "invalid-state", path: STATE_PATH, message: `Active state is invalid: ${validationDetails("state", value).errors.join("; ")}` });
+    } catch (error) {
+      issues.push({ code: "invalid-state", path: STATE_PATH, message: error instanceof Error ? `Active state is unreadable: ${error.message}` : "Active state is unreadable" });
     }
   }
 
@@ -104,9 +105,11 @@ export async function checkIntegrity(cwd: string): Promise<IntegrityIssue[]> {
         }
       }
       if (activeState.mode === "sdd") {
+        const contract = recordVersion(activeState, "SDD state");
         await assertSddConsistency(cwd, activeState);
-        if (activeState.phase === "validate") {
-          const validationPath = validationFailureRecordPath(activeState.id, activeState.attempt);
+        if (activeState.phase === contract.validationPhase) {
+          const attempt = contract.attemptNumber(activeState.attempt);
+          const validationPath = validationFailureRecordPath(activeState.id, attempt);
           let recorded = false;
           try {
             await git.run(["cat-file", "-e", `HEAD:${validationPath}`]);
@@ -115,15 +118,19 @@ export async function checkIntegrity(cwd: string): Promise<IntegrityIssue[]> {
             // No failure record exists until `ways sdd validate` fails.
           }
           if (recorded) {
-            const failure = await committedValidationFailureFailure(git, activeState.id, activeState.attempt ?? 0, head);
+            const failure = await committedValidationFailureFailure(git, activeState.id, attempt, head);
             if (failure) throw new Error(failure);
           }
         }
-        if (activeState.remediation && activeState.attempt) {
-          const path = remediationRecordPath(activeState.id, activeState.attempt);
+        const attempt = contract.attemptNumber(activeState.attempt);
+        if (activeState.remediation && attempt > 0) {
+          const path = remediationRecordPath(activeState.id, attempt);
           const transition = await remediationTransitionCommit(git, activeState.id, activeState.remediation, head);
           const value: unknown = JSON.parse(await git.run(["show", `${transition}:${path}`]));
-          if (!validateRemediation(value) || value.workId !== activeState.id || value.attempt !== activeState.attempt
+          if (!validateRemediation(value)) {
+            throw new Error(`Active remediation is invalid: ${validationDetails("remediation", value).errors.join("; ")}`);
+          }
+          if (value.workId !== activeState.id || value.attempt !== attempt
             || value.source !== activeState.remediation.source || value.target !== activeState.remediation.target
             || value.priorCheckpoint !== activeState.remediation.priorCheckpoint || value.reason !== activeState.remediation.reason
             || value.timestamp !== activeState.remediation.timestamp
@@ -134,10 +141,10 @@ export async function checkIntegrity(cwd: string): Promise<IntegrityIssue[]> {
           if (evidenceFailure) throw new Error(evidenceFailure);
           const changed = new Set([
             ...(await git.run(["diff", "--name-only"])).split("\n"),
-            ...(await git.run(["diff", "--cached", "--name-only"])).split("\n"),
+            ...(await git.run(["diff", "--cached", "--name-only", "HEAD"])).split("\n"),
             ...(await git.run(["ls-files", "--others", "--exclude-standard"])).split("\n"),
           ].filter(Boolean));
-          const priorMutation = [...changed].find((candidate) => isPriorAttemptArtifact(candidate, activeState.id, activeState.attempt!));
+          const priorMutation = [...changed].find((candidate) => isPriorAttemptArtifact(candidate, activeState.id, attempt));
           if (priorMutation) {
             issues.push({ code: "prior-artifact-mutated", path: priorMutation, message: "Prior SDD attempt artifacts are immutable" });
           }
@@ -150,8 +157,8 @@ export async function checkIntegrity(cwd: string): Promise<IntegrityIssue[]> {
           issues.push({ code: "state-git-divergence", path: STATE_PATH, message: "Plan HEAD is not its proposal commit" });
         }
       }
-    } catch {
-      issues.push({ code: "state-git-divergence", path: STATE_PATH, message: "Unable to reconcile state with Git" });
+    } catch (error) {
+      issues.push({ code: "state-git-divergence", path: STATE_PATH, message: error instanceof Error ? error.message : "Unable to reconcile state with Git" });
     }
   }
 

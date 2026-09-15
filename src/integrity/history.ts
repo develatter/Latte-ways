@@ -1,9 +1,11 @@
-import { MANIFEST_PATH } from "../domain/constants.js";
-import { SDD_PHASES, type RemediationRecord, type RemediationTarget, type SddPhase } from "../domain/types.js";
-import { validateRemediation } from "../domain/validation.js";
+import { readFile } from "node:fs/promises";
+import { join } from "node:path";
+import { MANIFEST_PATH, STATE_PATH } from "../domain/constants.js";
+import { lifecycleContract, type LifecycleContract } from "../domain/lifecycle.js";
+import type { RemediationRecord, RemediationTarget, SddPhase } from "../domain/types.js";
+import { validateRemediation, validationDetails, validateState } from "../domain/validation.js";
 import { loadConfig } from "../config/config.js";
 import { GitRepository, type CommitInfo } from "../git/git.js";
-import { loadState } from "../state/store.js";
 import { attemptPhasePath, attemptReviewPath, isPriorAttemptArtifact, remediationRecordPath } from "../work/attempt.js";
 import { remediationEvidenceFailure } from "../work/remediation.js";
 import { committedValidationFailureFailure } from "../work/validation-failure.js";
@@ -23,7 +25,6 @@ export interface HistoryCheckpoint {
   target?: RemediationTarget;
 }
 
-const REMEDIATION_TARGETS = new Set<RemediationTarget>(["implement", "decompose", "plan", "specify"]);
 
 export async function manifestIntroduction(git: GitRepository): Promise<string | undefined> {
   const output = await git.run(["log", "--format=%H", "--diff-filter=A", "--", MANIFEST_PATH]);
@@ -59,15 +60,20 @@ function issue(issues: IntegrityIssue[], commit: CommitInfo, code: string, messa
   issues.push({ code, path: commit.hash.slice(0, 12), message });
 }
 
-function parsedAttempt(value: string | undefined): number | undefined {
-  if (value === undefined) return 0;
-  if (!/^(?:0|[1-9]\d*)$/.test(value)) return undefined;
-  const attempt = Number(value);
-  return Number.isSafeInteger(attempt) ? attempt : undefined;
+function parsedAttempt(value: string | undefined, contract: LifecycleContract): number | undefined {
+  try {
+    return contract.attemptNumber(value, "history trailer");
+  } catch {
+    return undefined;
+  }
 }
-
-/** Replay ordered SDD history. A set is insufficient because repeated and backward gates are invalid. */
-export function replayCommits(commits: readonly CommitInfo[], activeId?: string): { issues: IntegrityIssue[]; checkpoints: HistoryCheckpoint[] } {
+/** Replay ordered SDD history using the resolved contract, never local phase lists. */
+export function replayCommits(
+  commits: readonly CommitInfo[],
+  activeId?: string,
+  schemaVersion: unknown = 1,
+): { issues: IntegrityIssue[]; checkpoints: HistoryCheckpoint[] } {
+  const contract = lifecycleContract(schemaVersion, "history contract");
   const issues: IntegrityIssue[] = [];
   const checkpoints: HistoryCheckpoint[] = [];
   const replay = new Map<string, ReplayState>();
@@ -76,8 +82,7 @@ export function replayCommits(commits: readonly CommitInfo[], activeId?: string)
   for (const commit of commits) {
     const { work, phase, state } = commit.trailers;
     // Harness-Work alone traces a commit: inline implementation and semantic-memory
-    // commits are not SDD transitions, so they carry no state or task. SDD commits
-    // are still replayed strictly below; unrecognized states are ignored.
+    // commits are not SDD transitions, so they carry no state or task.
     if (!work) {
       issue(issues, commit, "history-untraced", `Commit "${commit.subject}" lacks a Harness-Work trailer`);
       continue;
@@ -85,19 +90,22 @@ export function replayCommits(commits: readonly CommitInfo[], activeId?: string)
     if (state === "opened") opened.set(work, commit.hash.slice(0, 12));
     else if (state === "completed" || state === "cancelled") opened.delete(work);
 
-    const current = replay.get(work) ?? { attempt: 0, nextPhase: "intake", validationFailed: false };
-    if (commit.trailers.task && parsedAttempt(commit.trailers.attempt) !== current.attempt) {
+    const current = replay.get(work) ?? { attempt: 0, nextPhase: contract.phases[0], validationFailed: false };
+    const commitAttempt = parsedAttempt(commit.trailers.attempt, contract);
+    if (commit.trailers.task && commitAttempt !== current.attempt) {
       issue(issues, commit, "history-attempt-mismatch", `Task commit for ${work} does not belong to remediation attempt ${current.attempt}`);
       continue;
     }
-    if (state === "approved" && (phase !== current.nextPhase || parsedAttempt(commit.trailers.attempt) !== current.attempt)) {
-      issue(issues, commit, "history-attempt-mismatch", `Approval commit for ${work} does not belong to the current phase and remediation attempt`);
+    if (state === "approved") {
+      if (!contract.isPhase(phase) || phase !== current.nextPhase || commitAttempt !== current.attempt) {
+        issue(issues, commit, "history-attempt-mismatch", `Approval commit for ${work} does not belong to the current phase and remediation attempt`);
+      }
       continue;
     }
     if (state === "validation-failed") {
-      const attempt = parsedAttempt(commit.trailers.attempt);
-      if (phase !== "validate" || attempt === undefined || attempt !== current.attempt || current.nextPhase !== "validate" || current.validationFailed) {
-        issue(issues, commit, "history-invalid-validation-failure", `Validation failure record for ${work} is not in validate of attempt ${current.attempt}`);
+      if (!contract.isPhase(phase) || phase !== contract.validationPhase || commitAttempt === undefined
+        || commitAttempt !== current.attempt || current.nextPhase !== contract.validationPhase || current.validationFailed) {
+        issue(issues, commit, "history-invalid-validation-failure", `Validation failure record for ${work} is not in ${contract.validationPhase} of attempt ${current.attempt}`);
       } else {
         replay.set(work, { ...current, validationFailed: true });
       }
@@ -109,33 +117,72 @@ export function replayCommits(commits: readonly CommitInfo[], activeId?: string)
       continue;
     }
     if (remediationMatch) {
-      const target = remediationMatch[1] as RemediationTarget;
-      const attempt = parsedAttempt(commit.trailers.attempt);
-      if ((phase !== "review" && phase !== "validate") || phase !== current.nextPhase || !REMEDIATION_TARGETS.has(target)
-        || attempt === undefined || attempt !== current.attempt + 1) {
-        issue(issues, commit, "history-invalid-remediation", `Remediation transition for ${work} is not a legal ${current.nextPhase} attempt ${current.attempt + 1} transition`);
+      const targetText = remediationMatch[1];
+      const target = contract.isRemediationTarget(targetText) ? targetText : undefined;
+      let failure: string | undefined;
+      if (!contract.isPhase(phase) || commitAttempt === undefined || target === undefined) {
+        failure = `Remediation transition for ${work} is not a legal ${current.nextPhase} attempt ${current.attempt + 1} transition`;
+      } else {
+        try {
+          failure = contract.remediationFailure({
+            workId: work,
+            sourcePhase: phase,
+            currentPhase: current.nextPhase,
+            target,
+            attempt: commitAttempt,
+            expectedAttempt: current.attempt,
+          });
+        } catch (error) {
+          failure = error instanceof Error ? error.message : String(error);
+        }
+      }
+      if (failure) {
+        issue(issues, commit, "history-invalid-remediation", failure);
         continue;
       }
-      replay.set(work, { attempt, nextPhase: target, validationFailed: false });
-      checkpoints.push({ work, attempt, kind: "remediation", commit, phase: phase as SddPhase, target });
+      replay.set(work, { attempt: commitAttempt as number, nextPhase: target as RemediationTarget, validationFailed: false });
+      checkpoints.push({
+        work,
+        attempt: commitAttempt as number,
+        kind: "remediation",
+        commit,
+        phase: phase as SddPhase,
+        target: target as RemediationTarget,
+      });
       continue;
     }
 
-    if (state !== "completed" || !phase || !SDD_PHASES.includes(phase as SddPhase)) continue;
-    const attempt = parsedAttempt(commit.trailers.attempt);
-    const completed = phase as SddPhase;
-    if (current.validationFailed) {
-      issue(issues, commit, "history-broken-chain", `Certification of ${completed} for ${work} bypasses a validation failure in attempt ${current.attempt}; remediation is required`);
+    if (state !== "completed") continue;
+    if (!contract.isPhase(phase)) {
+      issue(issues, commit, "history-broken-chain", `Certification of ${String(phase)} for ${work} uses an unrecognized SDD phase`);
       continue;
     }
-    if (attempt === undefined || attempt !== current.attempt || completed !== current.nextPhase) {
-      issue(issues, commit, "history-broken-chain", `Certification of ${completed} for ${work} is out of order for attempt ${current.attempt}; expected ${current.nextPhase}`);
+    const completed = phase;
+    let failure: string | undefined;
+    if (commitAttempt === undefined) {
+      failure = `Certification of ${completed} for ${work} has an invalid attempt trailer`;
+    } else {
+      try {
+        failure = contract.certificationFailure({
+          workId: work,
+          completedPhase: completed,
+          expectedPhase: current.nextPhase,
+          attempt: commitAttempt,
+          expectedAttempt: current.attempt,
+          validationFailed: current.validationFailed,
+        });
+      } catch (error) {
+        failure = error instanceof Error ? error.message : String(error);
+      }
+    }
+    if (failure) {
+      issue(issues, commit, "history-broken-chain", failure);
       continue;
     }
-    const next = SDD_PHASES[SDD_PHASES.indexOf(completed) + 1];
+    const next = contract.nextPhase(completed);
     if (next) replay.set(work, { attempt: current.attempt, nextPhase: next, validationFailed: false });
     else replay.delete(work);
-    checkpoints.push({ work, attempt, kind: "certification", commit, phase: completed });
+    checkpoints.push({ work, attempt: commitAttempt!, kind: "certification", commit, phase: completed });
   }
 
   for (const [work, path] of opened) {
@@ -144,19 +191,24 @@ export function replayCommits(commits: readonly CommitInfo[], activeId?: string)
   return { issues, checkpoints };
 }
 
-export function auditCommits(commits: readonly CommitInfo[], activeId?: string): IntegrityIssue[] {
-  return replayCommits(commits, activeId).issues;
+export function auditCommits(commits: readonly CommitInfo[], activeId?: string, schemaVersion: unknown = 1): IntegrityIssue[] {
+  return replayCommits(commits, activeId, schemaVersion).issues;
 }
+
 
 /**
  * v1 remediation commits used Harness-State: remediated and put source/target
  * only in their committed record.  Hydrate that record before ordered replay;
  * new commits are deliberately required to carry the explicit trailers.
  */
-async function hydrateLegacyRemediations(git: GitRepository, commits: readonly CommitInfo[]): Promise<CommitInfo[]> {
+async function hydrateLegacyRemediations(
+  git: GitRepository,
+  commits: readonly CommitInfo[],
+  contract: LifecycleContract,
+): Promise<CommitInfo[]> {
   return Promise.all(commits.map(async (commit) => {
     if (commit.trailers.state !== "remediated" || !commit.trailers.work) return commit;
-    const attempt = parsedAttempt(commit.trailers.attempt);
+    const attempt = parsedAttempt(commit.trailers.attempt, contract);
     if (attempt === undefined || attempt === 0) return commit;
     try {
       const path = remediationRecordPath(commit.trailers.work, attempt);
@@ -178,41 +230,50 @@ async function remediationEvidenceIssues(git: GitRepository, checkpoints: readon
     if (checkpoint.kind !== "remediation" || !checkpoint.target) continue;
     const path = remediationRecordPath(checkpoint.work, checkpoint.attempt);
     let record: RemediationRecord | undefined;
+    let diagnostic: string | undefined;
     try {
       const added = (await git.run(["diff-tree", "--no-commit-id", "--name-only", "--diff-filter=A", "-r", checkpoint.commit.hash, "--", path])).split("\n").includes(path);
       const value: unknown = JSON.parse(await git.run(["show", `${checkpoint.commit.hash}:${path}`]));
-      if (added && validateRemediation(value)) record = value;
-    } catch {
-      // Report one stable issue below.
+      const details = validationDetails("remediation", value);
+      if (!added) diagnostic = `remediation record at ${path} was not added by the transition`;
+      else if (!details.valid) diagnostic = `remediation record at ${path} is invalid: ${details.errors.join("; ")}`;
+      else record = value as RemediationRecord;
+    } catch (error) {
+      diagnostic = error instanceof Error ? error.message : String(error);
     }
     let parent: string | undefined;
     try {
       parent = await git.parent(checkpoint.commit.hash);
     } catch {
-      // A transition cannot be a root commit.
+      diagnostic = diagnostic ?? "remediation transition cannot be a root commit";
     }
     if (!record || !parent || record.workId !== checkpoint.work || record.source !== checkpoint.phase || record.target !== checkpoint.target
       || record.attempt !== checkpoint.attempt || record.priorCheckpoint !== parent) {
-      issue(issues, checkpoint.commit, "history-invalid-remediation-evidence", `Remediation attempt ${checkpoint.attempt} for ${checkpoint.work} lacks matching transition evidence at ${path}`);
+      issue(issues, checkpoint.commit, "history-invalid-remediation-evidence",
+        diagnostic ?? `Remediation attempt ${checkpoint.attempt} for ${checkpoint.work} lacks matching transition evidence at ${path}`);
       continue;
     }
     try {
       const failure = await remediationEvidenceFailure(git, record, parent, checkpoint.commit.hash);
       if (failure) issue(issues, checkpoint.commit, "history-invalid-remediation-evidence", failure);
-    } catch {
-      issue(issues, checkpoint.commit, "history-invalid-remediation-evidence", `Remediation attempt ${checkpoint.attempt} evidence cannot be bound to its transition tree`);
+    } catch (error) {
+      issue(issues, checkpoint.commit, "history-invalid-remediation-evidence", error instanceof Error ? error.message : String(error));
     }
   }
   return issues;
 }
 
-async function validationFailureIssues(git: GitRepository, commits: readonly CommitInfo[]): Promise<IntegrityIssue[]> {
+async function validationFailureIssues(
+  git: GitRepository,
+  commits: readonly CommitInfo[],
+  contract: LifecycleContract,
+): Promise<IntegrityIssue[]> {
   const issues: IntegrityIssue[] = [];
   for (const commit of commits) {
     if (commit.trailers.state !== "validation-failed") continue;
-    const attempt = parsedAttempt(commit.trailers.attempt);
-    if (!commit.trailers.work || commit.trailers.phase !== "validate" || attempt === undefined) {
-      issue(issues, commit, "history-invalid-validation-failure", "Validation failure record has malformed work, attempt, or phase trailers");
+    const attempt = parsedAttempt(commit.trailers.attempt, contract);
+    if (!commit.trailers.work || !contract.isPhase(commit.trailers.phase) || commit.trailers.phase !== contract.validationPhase || attempt === undefined) {
+      issue(issues, commit, "history-invalid-validation-failure", `Validation failure record has malformed work, attempt, or ${contract.validationPhase} phase trailers`);
       continue;
     }
     const failure = await committedValidationFailureFailure(git, commit.trailers.work, attempt, commit.hash);
@@ -221,7 +282,14 @@ async function validationFailureIssues(git: GitRepository, commits: readonly Com
   return issues;
 }
 
-async function legacyTransitionArtifacts(git: GitRepository, commit: CommitInfo, work: string, attempt: number): Promise<Set<string>> {
+
+async function legacyTransitionArtifacts(
+  git: GitRepository,
+  commit: CommitInfo,
+  work: string,
+  attempt: number,
+  contract: LifecycleContract,
+): Promise<Set<string>> {
   const allowed = new Set<string>();
   if (commit.trailers.state !== "remediated") return allowed;
   try {
@@ -230,13 +298,11 @@ async function legacyTransitionArtifacts(git: GitRepository, commit: CommitInfo,
     allowed.add(remediationRecordPath(work, attempt));
     const sourceAttempt = attempt - 1;
     if (value.source === "review") {
-      allowed.add(attemptPhasePath(work, sourceAttempt, "review"));
+      allowed.add(attemptPhasePath(work, sourceAttempt, contract.reviewPhase));
       allowed.add(attemptReviewPath(work, sourceAttempt));
     } else if (value.evidence.kind === "validate" && !("failureRecord" in value.evidence)) {
-      // v1 validation remediation captured its inline failure marker in the
-      // previous validate artifact. New transitions link a prior committed
-      // validation-failure record and must not receive this exception.
-      allowed.add(attemptPhasePath(work, sourceAttempt, "validate"));
+      // v1 validation remediation captured its inline failure marker in the previous validate artifact.
+      allowed.add(attemptPhasePath(work, sourceAttempt, contract.validationPhase));
     }
   } catch {
     // The remediation evidence check reports malformed legacy records.
@@ -244,23 +310,27 @@ async function legacyTransitionArtifacts(git: GitRepository, commit: CommitInfo,
   return allowed;
 }
 
-async function priorArtifactMutationIssues(git: GitRepository, commits: readonly CommitInfo[]): Promise<IntegrityIssue[]> {
+async function priorArtifactMutationIssues(
+  git: GitRepository,
+  commits: readonly CommitInfo[],
+  contract: LifecycleContract,
+): Promise<IntegrityIssue[]> {
   const issues: IntegrityIssue[] = [];
   for (const commit of commits) {
     const { work, phase, state } = commit.trailers;
-    const attempt = parsedAttempt(commit.trailers.attempt);
+    const attempt = parsedAttempt(commit.trailers.attempt, contract);
     if (!work || attempt === undefined || attempt === 0 || state === "cancelled"
-      || (state === "completed" && phase === "close")) continue;
+      || (state === "completed" && phase === contract.phases.at(-1))) continue;
     const allowed = new Set<string>();
-    if (state?.startsWith("remediated-") && (phase === "review" || phase === "validate")) {
+    if (state?.startsWith("remediated-") && (phase === contract.reviewPhase || phase === contract.validationPhase)) {
       const sourceAttempt = attempt - 1;
       allowed.add(remediationRecordPath(work, attempt));
-      if (phase === "review") {
+      if (phase === contract.reviewPhase) {
         allowed.add(attemptPhasePath(work, sourceAttempt, phase));
         allowed.add(attemptReviewPath(work, sourceAttempt));
       }
     }
-    for (const path of await legacyTransitionArtifacts(git, commit, work, attempt)) allowed.add(path);
+    for (const path of await legacyTransitionArtifacts(git, commit, work, attempt, contract)) allowed.add(path);
     const changed = (await git.run(["diff-tree", "--no-commit-id", "--name-only", "-r", commit.hash])).split("\n").filter(Boolean);
     const protectedPath = changed.find((path) => !allowed.has(path) && isPriorAttemptArtifact(path, work, attempt));
     if (protectedPath) issue(issues, commit, "history-prior-artifact-mutated", `Prior SDD artifact was modified during attempt ${attempt}: ${protectedPath}`);
@@ -268,14 +338,20 @@ async function priorArtifactMutationIssues(git: GitRepository, commits: readonly
   return issues;
 }
 
-export async function auditHistory(git: GitRepository, commits: readonly CommitInfo[], activeId?: string): Promise<{ issues: IntegrityIssue[]; checkpoints: HistoryCheckpoint[] }> {
-  const replayCommitsInput = await hydrateLegacyRemediations(git, commits);
-  const replayed = replayCommits(replayCommitsInput, activeId);
+export async function auditHistory(
+  git: GitRepository,
+  commits: readonly CommitInfo[],
+  activeId?: string,
+  schemaVersion: unknown = 1,
+): Promise<{ issues: IntegrityIssue[]; checkpoints: HistoryCheckpoint[] }> {
+  const contract = lifecycleContract(schemaVersion, "history contract");
+  const replayCommitsInput = await hydrateLegacyRemediations(git, commits, contract);
+  const replayed = replayCommits(replayCommitsInput, activeId, contract.schemaVersion);
   return { ...replayed, issues: [
     ...replayed.issues,
     ...await remediationEvidenceIssues(git, replayed.checkpoints),
-    ...await validationFailureIssues(git, commits),
-    ...await priorArtifactMutationIssues(git, commits),
+    ...await validationFailureIssues(git, commits, contract),
+    ...await priorArtifactMutationIssues(git, commits, contract),
   ] };
 }
 
@@ -284,10 +360,20 @@ export async function checkHistory(cwd: string, options: HistoryOptions = {}): P
   const anchor = await resolveAnchor(cwd, git, options.since);
   if (!anchor) return [];
   let activeId: string | undefined;
+  let schemaVersion: unknown = 1;
   try {
-    activeId = (await loadState(cwd))?.id;
+    const value: unknown = JSON.parse(await readFile(join(cwd, STATE_PATH), "utf8"));
+    if (value !== null && typeof value === "object" && "schemaVersion" in value) schemaVersion = value.schemaVersion;
+    if (validateState(value)) activeId = value.id;
   } catch {
-    // An unreadable state is reported by checkIntegrity.
+    // Missing or unreadable state is reported by checkIntegrity.
   }
-  return (await auditHistory(git, await commitsAfter(git, anchor, options.to), activeId)).issues;
+  try {
+    return (await auditHistory(git, await commitsAfter(git, anchor, options.to), activeId, schemaVersion)).issues;
+  } catch (error) {
+    if (error instanceof Error && error.message.includes("unsupported lifecycle contract version")) {
+      return [{ code: "history-unsupported-lifecycle-version", path: STATE_PATH, message: error.message }];
+    }
+    throw error;
+  }
 }

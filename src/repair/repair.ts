@@ -1,6 +1,7 @@
 import { join } from "node:path";
-import { SDD_PHASES, type RemediationRecord, type SddPhase, type WorkState } from "../domain/types.js";
-import { validateRemediation } from "../domain/validation.js";
+import { recordVersion } from "../domain/lifecycle.js";
+import type { RemediationRecord, WorkState } from "../domain/types.js";
+import { validateRemediation, validationDetails } from "../domain/validation.js";
 import { STATE_PATH } from "../domain/constants.js";
 import { GitRepository } from "../git/git.js";
 import { auditHistory, commitsAfter, type HistoryCheckpoint } from "../integrity/history.js";
@@ -27,7 +28,8 @@ export async function diagnose(cwd: string): Promise<RepairDiagnosis> {
 }
 
 async function checkpointsAtHead(git: GitRepository, state: WorkState): Promise<HistoryCheckpoint[]> {
-  const replay = await auditHistory(git, await commitsAfter(git, state.baseCommit), state.id);
+  const contract = recordVersion(state, "repair state");
+  const replay = await auditHistory(git, await commitsAfter(git, state.baseCommit), state.id, contract.schemaVersion);
   if (replay.issues.length > 0) {
     throw new Error(`Git history cannot be adopted: ${replay.issues[0]!.message}`);
   }
@@ -37,7 +39,8 @@ async function checkpointsAtHead(git: GitRepository, state: WorkState): Promise<
 async function remediationAt(git: GitRepository, checkpoint: HistoryCheckpoint): Promise<RemediationRecord> {
   const path = remediationRecordPath(checkpoint.work, checkpoint.attempt);
   const value: unknown = JSON.parse(await git.run(["show", `${checkpoint.commit.hash}:${path}`]));
-  if (!validateRemediation(value)) throw new Error(`Remediation record at ${path} is invalid`);
+  if (!validateRemediation(value)) throw new Error(`Remediation record at ${path} is invalid: ${validationDetails("remediation", value).errors.join("; ")}`);
+  recordVersion(value, `remediation record at ${path}`);
   return value;
 }
 
@@ -49,6 +52,7 @@ async function latestRemediation(git: GitRepository, checkpoints: readonly Histo
 export async function adoptHead(cwd: string): Promise<WorkState | undefined> {
   const state = await loadState(cwd);
   if (!state || state.mode !== "sdd") throw new Error("Adopt-head requires active SDD state");
+  const contract = recordVersion(state, "repair state");
   const git = new GitRepository(cwd);
   const checkpoints = await checkpointsAtHead(git, state);
   const checkpoint = checkpoints[checkpoints.length - 1];
@@ -66,12 +70,12 @@ export async function adoptHead(cwd: string): Promise<WorkState | undefined> {
       priorCheckpoint: record.priorCheckpoint, attempt: record.attempt, timestamp: record.timestamp,
     };
   } else {
-    const next = SDD_PHASES[SDD_PHASES.indexOf(checkpoint.phase) + 1];
+    const next = contract.nextPhase(checkpoint.phase);
     if (!next) {
       await removeState(cwd);
       return undefined;
     }
-    state.lastCompletedPhase = checkpoint.phase as SddPhase;
+    state.lastCompletedPhase = checkpoint.phase;
     state.phase = next;
     state.gateCommit = await git.parent(checkpoint.commit.hash);
     const remediation = await latestRemediation(git, checkpoints, checkpoint.attempt);

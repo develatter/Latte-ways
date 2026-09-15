@@ -4,6 +4,7 @@ import type { AnySchema, ErrorObject, ValidateFunction } from "ajv";
 import { Ajv2020 } from "ajv/dist/2020.js";
 import type { CoverageArea, MemorySource, MemoryState, ReconciliationEvidence } from "../memory/model.js";
 import { CHECK_NAMES, type ApprovalRecord, type HarnessConfig, type ManagedManifest, type RemediationRecord, type ReviewResult, type ValidationFailureRecord, type WorkState } from "./types.js";
+import { lifecycleContract, type LifecycleContractError } from "./lifecycle.js";
 
 type SchemaName = "config" | "manifest" | "state" | "task" | "review" | "approval" | "remediation" | "validation-failure" | "coverage" | "memory-source" | "memory-state" | "reconciliation";
 
@@ -70,10 +71,30 @@ function formatErrors(errors: ErrorObject[] | null | undefined): string[] {
   return (errors ?? []).map((error) => `${error.instancePath || "/"} ${error.message ?? "is invalid"}`);
 }
 
+const LIFECYCLE_SCHEMAS: Record<string, true> = { state: true, review: true, approval: true, remediation: true, "validation-failure": true };
+
+function lifecycleVersionError(name: keyof typeof validators, value: unknown): string | undefined {
+  if (!LIFECYCLE_SCHEMAS[name] || value === null || typeof value !== "object" || !("schemaVersion" in value)) return undefined;
+  try {
+    lifecycleContract(value.schemaVersion, `${name} record`);
+    if (name === "remediation" && "evidence" in value && value.evidence !== null && typeof value.evidence === "object"
+      && "review" in value.evidence && value.evidence.review !== null && typeof value.evidence.review === "object"
+      && "schemaVersion" in value.evidence.review) {
+      lifecycleContract(value.evidence.review.schemaVersion, "remediation review evidence");
+    }
+    return undefined;
+  } catch (error) {
+    return (error as LifecycleContractError).message;
+  }
+}
+
 function validate(name: keyof typeof validators, value: unknown): ValidationResult {
   const validator = validators[name];
   const valid = validator(value);
-  return { valid, errors: valid ? [] : formatErrors(validator.errors) };
+  const errors = formatErrors(validator.errors);
+  const versionError = lifecycleVersionError(name, value);
+  if (versionError && !errors.includes(versionError)) errors.unshift(versionError);
+  return { valid: valid && versionError === undefined, errors };
 }
 
 export function validateConfig(value: unknown): value is HarnessConfig {

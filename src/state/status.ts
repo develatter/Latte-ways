@@ -1,11 +1,11 @@
 import { readFile } from "node:fs/promises";
 import { join } from "node:path";
 import { STATUS_PATH } from "../domain/constants.js";
+import { lifecycleContract, recordVersion } from "../domain/lifecycle.js";
 import type { ApprovalProfile, ExecutionMode, Mode, RemediationMetadata, SddPhase, WorkState, WorkStatus } from "../domain/types.js";
 import { stableJson, writeAtomic } from "../fs/files.js";
 import { GitRepository } from "../git/git.js";
-
-export const HUMAN_GATES: ReadonlySet<SddPhase> = new Set<SddPhase>(["intake", "plan", "close"]);
+export const HUMAN_GATES: ReadonlySet<SddPhase> = new Set<SddPhase>(lifecycleContract(1, "status contract").humanGatePhases);
 
 export interface StatusSummary {
   schemaVersion: 1;
@@ -26,6 +26,7 @@ export interface StatusSummary {
 
 export function projectStatus(state: WorkState | undefined, now = new Date().toISOString()): StatusSummary {
   if (!state) return { schemaVersion: 1, active: false, updatedAt: now };
+  const contract = recordVersion(state, "SDD state");
   const summary: StatusSummary = {
     schemaVersion: 1,
     active: true,
@@ -37,7 +38,7 @@ export function projectStatus(state: WorkState | undefined, now = new Date().toI
   };
   if (state.phase) {
     summary.phase = state.phase;
-    summary.humanGate = state.profile === "supervised" && HUMAN_GATES.has(state.phase);
+    summary.humanGate = state.profile === "supervised" && contract.humanGatePhases.some((phase) => phase === state.phase);
   }
   if (state.profile) summary.profile = state.profile;
   if (state.execution) summary.execution = state.execution;
