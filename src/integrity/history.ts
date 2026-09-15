@@ -1,7 +1,7 @@
 import { readFile } from "node:fs/promises";
 import { join } from "node:path";
 import { MANIFEST_PATH, STATE_PATH } from "../domain/constants.js";
-import { lifecycleContract, recordVersion, type LifecycleContract } from "../domain/lifecycle.js";
+import { LifecycleContractError, lifecycleContract, recordVersion, type LifecycleContract } from "../domain/lifecycle.js";
 import type { RemediationRecord, RemediationTarget, SddPhase } from "../domain/types.js";
 import { validateRemediation, validationDetails, validateState } from "../domain/validation.js";
 import { loadConfig } from "../config/config.js";
@@ -72,6 +72,7 @@ export function replayCommits(
   commits: readonly CommitInfo[],
   activeId?: string,
   schemaVersion: unknown = 1,
+  transportOnlyMerges: ReadonlySet<string> = new Set(),
 ): { issues: IntegrityIssue[]; checkpoints: HistoryCheckpoint[] } {
   const contract = lifecycleContract(schemaVersion, "history contract");
   const issues: IntegrityIssue[] = [];
@@ -84,6 +85,7 @@ export function replayCommits(
     // Harness-Work alone traces a commit: inline implementation and semantic-memory
     // commits are not SDD transitions, so they carry no state or task.
     if (!work) {
+      if (transportOnlyMerges.has(commit.hash)) continue;
       issue(issues, commit, "history-untraced", `Commit "${commit.subject}" lacks a Harness-Work trailer`);
       continue;
     }
@@ -192,9 +194,31 @@ export function replayCommits(
   }
   return { issues, checkpoints };
 }
-
 export function auditCommits(commits: readonly CommitInfo[], activeId?: string, schemaVersion: unknown = 1): IntegrityIssue[] {
   return replayCommits(commits, activeId, schemaVersion).issues;
+}
+
+async function transportOnlyMergeHashes(
+  git: GitRepository,
+  commits: readonly CommitInfo[],
+  contract: LifecycleContract,
+): Promise<Set<string>> {
+  const safe = new Set<string>();
+  for (const commit of commits) {
+    if (commit.trailers.work) continue;
+    try {
+      const parents = await git.parents(commit.hash);
+      if (parents.length !== 2) continue;
+      const [base, branch] = parents;
+      if (!base || !branch) continue;
+      if (await git.treeId(commit.hash) !== await git.mergedTree(base, branch)) continue;
+      const introduced = await commitsAfter(git, base, branch);
+      if (replayCommits(introduced, undefined, contract.schemaVersion).issues.length === 0) safe.add(commit.hash);
+    } catch {
+      // A merge whose topology or expected tree cannot be proven remains untraced.
+    }
+  }
+  return safe;
 }
 
 
@@ -217,8 +241,14 @@ async function hydrateLegacyRemediations(
       const value: unknown = JSON.parse(await git.run(["show", `${commit.hash}:${path}`]));
       const details = validationDetails("remediation", value);
       if (!details.valid) {
-        if (details.errors.some((error) => error.includes("unsupported lifecycle contract version"))) {
-          recordVersion(value, `legacy remediation record at ${path}`);
+        const unsupported = details.errors.find((error) => error.includes("unsupported lifecycle contract version"));
+        if (unsupported) {
+          try {
+            recordVersion(value, `legacy remediation record at ${path}`);
+          } catch (error) {
+            throw error;
+          }
+          throw new LifecycleContractError("lifecycle-unsupported-version", unsupported);
         }
         return commit;
       }
@@ -356,8 +386,9 @@ export async function auditHistory(
   schemaVersion: unknown = 1,
 ): Promise<{ issues: IntegrityIssue[]; checkpoints: HistoryCheckpoint[] }> {
   const contract = lifecycleContract(schemaVersion, "history contract");
+  const transportOnlyMerges = await transportOnlyMergeHashes(git, commits, contract);
   const replayCommitsInput = await hydrateLegacyRemediations(git, commits, contract);
-  const replayed = replayCommits(replayCommitsInput, activeId, contract.schemaVersion);
+  const replayed = replayCommits(replayCommitsInput, activeId, contract.schemaVersion, transportOnlyMerges);
   return { ...replayed, issues: [
     ...replayed.issues,
     ...await remediationEvidenceIssues(git, replayed.checkpoints),
