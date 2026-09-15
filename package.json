@@ -1,5 +1,5 @@
 {
-  "name": "@develatter/latte-ways",
+  "name": "@develatter/ways",
   "version": "0.2.2",
   "description": "A minimal, agent-agnostic development harness with Git-backed workflows and living OKF memory",
   "type": "module",
@@ -38,7 +38,7 @@
   "license": "MIT",
   "repository": {
     "type": "git",
-    "url": "https://github.com/develatter/Latte-ways.git"
+    "url": "https://github.com/develatter/ways.git"
   },
   "publishConfig": {
     "registry": "https://npm.pkg.github.com"

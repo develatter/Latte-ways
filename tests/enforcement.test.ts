@@ -134,8 +134,8 @@ describe("commit-msg hook", () => {
 
   it("resolves the CLI from a consumer node_modules inside a task worktree without WAYS_CLI", async () => {
     const { cwd, git } = await repository();
-    await mkdir(join(cwd, "node_modules"));
-    await symlink(join(import.meta.dirname, ".."), join(cwd, "node_modules", "latte-ways"));
+    await mkdir(join(cwd, "node_modules", "@develatter"), { recursive: true });
+    await symlink(join(import.meta.dirname, ".."), join(cwd, "node_modules", "@develatter", "ways"));
     const head = await git.head();
     await saveState(cwd, {
       schemaVersion: 1, harnessVersion: "0.1.0", id: "wt", mode: "sdd", status: "active", profile: "autonomous",

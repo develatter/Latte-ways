@@ -1,6 +1,6 @@
 # Living memory operations
 
-Latte Ways keeps durable repository truth in OKF under `.ways/knowledge/`. Current system, component, feature, convention, decision, and FAQ records are distinct from the explicitly labelled `roadmap` and `debt` collections. Removed facts are deleted unless they remain operationally useful; useful history moves to `deprecated` and is omitted from normal query results.
+ways keeps durable repository truth in OKF under `.ways/knowledge/`. Current system, component, feature, convention, decision, and FAQ records are distinct from the explicitly labelled `roadmap` and `debt` collections. Removed facts are deleted unless they remain operationally useful; useful history moves to `deprecated` and is omitted from normal query results.
 
 ## Development
 

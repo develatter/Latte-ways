@@ -160,6 +160,10 @@ describe("baseline end-to-end coverage", () => {
     await git.run(["commit", "--allow-empty", "-q", "-m", "initial"]);
     await execFileSync("npm", ["init", "-y"], { cwd, stdio: "ignore" });
     await execFileSync("npm", ["install", "--save-dev", tarball], { cwd, stdio: "ignore" });
+    const installed = JSON.parse(await readFile(join(cwd, "node_modules", "@develatter", "ways", "package.json"), "utf8"));
+    expect(installed.name).toBe("@develatter/ways");
+    const help = execFileSync("npx", ["--no-install", "ways", "--help"], { cwd, encoding: "utf8" });
+    expect(help).toMatch(/^ways /);
     const bin = execFileSync("npx", ["--no-install", "ways", "--version"], { cwd, encoding: "utf8" }).trim();
     expect(bin).toBeTruthy();
     await execFileSync("npx", ["--no-install", "ways", "bootstrap", `--test-command=${JSON.stringify([process.execPath, "-e", "process.exit(0)"])}`, "--no-adapters"], { cwd, stdio: "ignore" });

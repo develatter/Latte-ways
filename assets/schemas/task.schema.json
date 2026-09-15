@@ -1,6 +1,6 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://latte-ways.dev/schemas/task-v1.json",
+  "$id": "https://ways.dev/schemas/task-v1.json",
   "type": "object",
   "additionalProperties": false,
   "required": ["id", "title", "status", "dependsOn", "commits"],

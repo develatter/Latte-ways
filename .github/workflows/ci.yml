@@ -40,8 +40,8 @@ jobs:
           NODE_AUTH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           version=$(node -p "require('./package.json').version")
-          if npm view "@develatter/latte-ways@${version}" version --registry=https://npm.pkg.github.com >/dev/null 2>&1; then
-            echo "@develatter/latte-ways@${version} already exists; skipping publish."
+          if npm view "@develatter/ways@${version}" version --registry=https://npm.pkg.github.com >/dev/null 2>&1; then
+            echo "@develatter/ways@${version} already exists; skipping publish."
           else
             npm publish --registry=https://npm.pkg.github.com
           fi

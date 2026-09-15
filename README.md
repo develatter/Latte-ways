@@ -1,4 +1,4 @@
-# latte-ways
+# ways
 
 A minimal, agent-agnostic development harness with Git-backed workflows, deterministic SDD gates, and living OKF v0.2 memory.
 
@@ -6,7 +6,7 @@ A minimal, agent-agnostic development harness with Git-backed workflows, determi
 
 ## Why
 
-Long-running coding agents tend to lose state, skip process, perform unnecessary rituals, and preserve stale documentation as truth. Latte Ways separates those concerns:
+Long-running coding agents tend to lose state, skip process, perform unnecessary rituals, and preserve stale documentation as truth. ways separates those concerns:
 
 - **Git** is the immutable work log.
 - **OKF memory** describes the repository as it exists now.
@@ -23,7 +23,7 @@ Long-running coding agents tend to lose state, skip process, perform unnecessary
 ## Installation
 
 ```bash
-npm install --save-dev @develatter/latte-ways --registry=https://npm.pkg.github.com
+npm install --save-dev @develatter/ways --registry=https://npm.pkg.github.com
 npx ways bootstrap --test-command='["npm","test"]'
 scripts/check.sh
 ```

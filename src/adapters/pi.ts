@@ -16,7 +16,7 @@ const GUARD_PATH = `${PI_DIR}/ways-guard.sh`;
 const STATUSLINE_PATH = `${PI_DIR}/ways-statusline.sh`;
 const READ_TOOLS = "read, grep, find, ls";
 
-const EXTENSION = `// Managed by latte-ways. Guard and status line for pi, both backed by the harness scripts.
+const EXTENSION = `// Managed by ways. Guard and status line for pi, both backed by the harness scripts.
 import { spawnSync } from "node:child_process";
 import { join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";

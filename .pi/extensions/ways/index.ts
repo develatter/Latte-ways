@@ -1,4 +1,4 @@
-// Managed by latte-ways. Guard and status line for pi, both backed by the harness scripts.
+// Managed by ways. Guard and status line for pi, both backed by the harness scripts.
 import { spawnSync } from "node:child_process";
 import { join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";

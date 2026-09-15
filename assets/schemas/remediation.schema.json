@@ -1,6 +1,6 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://latte-ways.dev/schemas/remediation-v1.json",
+  "$id": "https://ways.dev/schemas/remediation-v1.json",
   "type": "object",
   "additionalProperties": false,
   "required": ["schemaVersion", "workId", "source", "target", "reason", "evidence", "priorCheckpoint", "attempt", "timestamp"],
@@ -64,7 +64,7 @@
         "kind": { "const": "review" },
         "review": {
           "allOf": [
-            { "$ref": "https://latte-ways.dev/schemas/review-v1.json" },
+            { "$ref": "https://ways.dev/schemas/review-v1.json" },
             { "type": "object", "properties": { "verdict": { "const": "fail" } }, "required": ["verdict"] }
           ]
         }

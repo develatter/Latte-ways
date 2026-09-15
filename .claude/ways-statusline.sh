@@ -1,5 +1,5 @@
 #!/usr/bin/env sh
-# Managed by latte-ways. Appends the harness status to the user's own statusline.
+# Managed by ways. Appends the harness status to the user's own statusline.
 # Usage: <script> [original statusline command]
 input="$(cat)"
 prefix=""

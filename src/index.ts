@@ -1,4 +1,4 @@
-export const HARNESS_NAME = "latte-ways";
+export const HARNESS_NAME = "ways";
 export const HARNESS_VERSION = "0.2.0";
 
 export * from "./domain/types.js";

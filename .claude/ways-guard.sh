@@ -1,5 +1,5 @@
 #!/usr/bin/env sh
-# Managed by latte-ways. Blocks agent-issued git commits when no harness work is active,
+# Managed by ways. Blocks agent-issued git commits when no harness work is active,
 # blocks production writes in the main worktree during delegated SDD delivery phases,
 # and blocks any tool write to human approvals or review verdicts.
 input="$(cat)"

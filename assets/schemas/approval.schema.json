@@ -1,6 +1,6 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://latte-ways.dev/schemas/approval-v1.json",
+  "$id": "https://ways.dev/schemas/approval-v1.json",
   "type": "object",
   "additionalProperties": false,
   "required": ["schemaVersion", "workId", "phase", "gateCommit", "digest", "approvedBy", "approvedAt"],
