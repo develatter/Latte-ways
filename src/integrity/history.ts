@@ -212,8 +212,12 @@ async function transportOnlyMergeHashes(
       const [base, branch] = parents;
       if (!base || !branch) continue;
       if (await git.treeId(commit.hash) !== await git.mergedTree(base, branch)) continue;
+      const prefix: CommitInfo[] = [];
+      for (const candidate of commits) {
+        if (await git.isAncestor(candidate.hash, base)) prefix.push(candidate);
+      }
       const introduced = await commitsAfter(git, base, branch);
-      if (replayCommits(introduced, undefined, contract.schemaVersion).issues.length === 0) safe.add(commit.hash);
+      if (replayCommits([...prefix, ...introduced], undefined, contract.schemaVersion, safe).issues.length === 0) safe.add(commit.hash);
     } catch {
       // A merge whose topology or expected tree cannot be proven remains untraced.
     }

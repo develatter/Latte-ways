@@ -30,6 +30,25 @@ describe("versioned lifecycle contract", () => {
     const git = { run: async () => JSON.stringify(record) };
     await expect(auditHistory(git as never, [legacy])).rejects.toThrow(/unsupported lifecycle contract version 99/);
   });
+  it("seeds transport-merge validation from the first-parent lifecycle prefix", async () => {
+    const intake = commit(1, "intake");
+    const explore = commit(2, "explore");
+    const merge: CommitInfo = {
+      hash: `${"03"}${"a".repeat(38)}`,
+      subject: "transport merge",
+      body: "",
+      trailers: {},
+    };
+    const git = {
+      isAncestor: async (candidate: string, base: string) => candidate === intake.hash && base === intake.hash,
+      parents: async () => [intake.hash, explore.hash],
+      treeId: async () => "tree",
+      mergedTree: async () => "tree",
+      run: async () => explore.hash,
+      commitInfo: async () => explore,
+    };
+    await expect(auditHistory(git as never, [intake, merge])).resolves.toMatchObject({ issues: [] });
+  });
 
   it("keeps normal completion semantics and exposes recovery adjacency", () => {
     const phases = ["intake", "explore", "assess", "specify", "plan", "decompose", "implement", "review", "validate", "reconcile-memory", "close"];
