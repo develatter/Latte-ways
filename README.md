@@ -113,7 +113,7 @@ The canonical check validates managed files, schemas, state/Git consistency, com
 Compliance does not depend on the agent obeying its prompt:
 
 - Bootstrap installs a managed `commit-msg` hook under `.ways/hooks/` and sets `core.hooksPath`. Any commit not traced to the active work with a matching `Harness-Work` trailer is rejected. Small edits open `ways quick start <id>` first.
-- `ways check --history [--since=<ref>]` audits every first-parent commit after the anchor (`--since`, `historySince` in config, or the commit that introduced `.ways/manifest.json`) for trailers and unbroken SDD certification chains. `scripts/check.sh` runs it, so a `--no-verify` bypass still fails in CI.
+- `ways check --history [--since=<ref>] [--to=<ref>]` audits every commit in the selected ancestry range (or after `historySince` in config) for trailers and unbroken SDD certification chains. CI sets `--to` to the pull-request head so GitHub's synthetic merge commit is not treated as authored history. `scripts/check.sh` runs the audit, so a `--no-verify` bypass still fails in CI.
 - With an active work, integrity also fails on any commit after its base that lacks the work trailer.
 - Certifying a supervised human gate requires a bound approval artifact in the same commit; the closing commit must delete the one committed for `close`. Tool writes under `approvals/` and `reviews/` are blocked by the guard.
 

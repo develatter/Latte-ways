@@ -229,6 +229,25 @@ describe("history verification", () => {
     expect(await checkHistory(cwd, { since: "HEAD" })).toEqual([]);
   });
 
+  it("audits a pull request head without rejecting GitHub's synthetic merge commit", async () => {
+    const { cwd, git } = await repository();
+    await startQuick(cwd, "pull-request");
+    await writeFile(join(cwd, "pr.txt"), "change\n");
+    await git.commit(["pr.txt"], "feat: pull request", { work: "pull-request" });
+    const pullRequestHead = await git.head();
+    const base = await git.run(["rev-parse", `${pullRequestHead}^`]);
+    const merge = await git.run([
+      "commit-tree", `${pullRequestHead}^{tree}`,
+      "-p", base,
+      "-p", pullRequestHead,
+      "-m", "synthetic merge",
+    ]);
+    await git.run(["reset", "--hard", merge]);
+
+    expect((await checkHistory(cwd)).map((issue) => issue.code)).toContain("history-untraced");
+    expect(await checkHistory(cwd, { to: pullRequestHead })).toEqual([]);
+  });
+
   it("accepts a complete SDD certification chain", async () => {
     const { cwd } = await repository();
     await startSdd(cwd, "chain", "autonomous");

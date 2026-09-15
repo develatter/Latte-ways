@@ -11,6 +11,7 @@ import type { IntegrityIssue } from "./integrity.js";
 
 export interface HistoryOptions {
   since?: string;
+  to?: string;
 }
 
 export interface HistoryCheckpoint {
@@ -41,8 +42,8 @@ async function resolveAnchor(cwd: string, git: GitRepository, since?: string): P
   return manifestIntroduction(git);
 }
 
-export async function commitsAfter(git: GitRepository, anchor: string): Promise<CommitInfo[]> {
-  const output = await git.run(["rev-list", "--topo-order", "--reverse", `${anchor}..HEAD`]);
+export async function commitsAfter(git: GitRepository, anchor: string, to = "HEAD"): Promise<CommitInfo[]> {
+  const output = await git.run(["rev-list", "--topo-order", "--reverse", `${anchor}..${to}`]);
   const commits: CommitInfo[] = [];
   for (const hash of output.split("\n").filter(Boolean)) commits.push(await git.commitInfo(hash));
   return commits;
@@ -288,5 +289,5 @@ export async function checkHistory(cwd: string, options: HistoryOptions = {}): P
   } catch {
     // An unreadable state is reported by checkIntegrity.
   }
-  return (await auditHistory(git, await commitsAfter(git, anchor), activeId)).issues;
+  return (await auditHistory(git, await commitsAfter(git, anchor, options.to), activeId)).issues;
 }

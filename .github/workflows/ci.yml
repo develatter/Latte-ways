@@ -18,6 +18,8 @@ jobs:
       - run: npm ci
       - run: npm run build
       - run: scripts/check.sh
+        env:
+          WAYS_HISTORY_TO: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.sha || '' }}
 
   publish:
     if: github.event_name == 'push' && github.ref == 'refs/heads/master'

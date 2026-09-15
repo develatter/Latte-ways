@@ -238,7 +238,11 @@ export async function run(argv: readonly string[], cwd = process.cwd()): Promise
   if (command === "check") {
     if (args.includes("--history")) {
       const since = args.find((arg) => arg.startsWith("--since="))?.slice(8);
-      const issues = await checkHistory(cwd, since ? { since } : {});
+      const to = args.find((arg) => arg.startsWith("--to="))?.slice(5);
+      const issues = await checkHistory(cwd, {
+        ...(since ? { since } : {}),
+        ...(to ? { to } : {}),
+      });
       for (const issue of issues) console.error(`${issue.code}: ${issue.path}: ${issue.message}`);
       if (issues.length > 0) return 1;
       console.log("History checks passed.");
