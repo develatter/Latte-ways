@@ -39,12 +39,16 @@ export class GitError extends Error {
 export class GitRepository {
   constructor(readonly cwd: string) {}
 
-  async run(args: readonly string[]): Promise<string> {
+  async run(args: readonly string[], env?: NodeJS.ProcessEnv, sanitizeGitEnv = false): Promise<string> {
     try {
+      const baseEnvironment = sanitizeGitEnv
+        ? Object.fromEntries(Object.entries(process.env).filter(([key]) => !key.startsWith("GIT_")))
+        : process.env;
       const { stdout } = await execFileAsync("git", [...args], {
         cwd: this.cwd,
         encoding: "utf8",
         maxBuffer: 10 * 1024 * 1024,
+        env: { ...baseEnvironment, ...(env ?? {}) },
       });
       return stdout.trimEnd();
     } catch (error) {

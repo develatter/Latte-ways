@@ -11,3 +11,4 @@ export * from "./memory/validation.js";
 export * from "./memory/workflow.js";
 export * from "./memory/reconciliation.js";
 export * from "./memory/freshness.js";
+export * from "./evals/index.js";
