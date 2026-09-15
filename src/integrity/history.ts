@@ -216,7 +216,7 @@ async function transportOnlyMergeHashes(
       for (const candidate of commits) {
         if (await git.isAncestor(candidate.hash, base)) prefix.push(candidate);
       }
-      const introduced = await commitsAfter(git, base, branch);
+      const introduced = await hydrateLegacyRemediations(git, await commitsAfter(git, base, branch), contract);
       if (replayCommits([...prefix, ...introduced], undefined, contract.schemaVersion, safe).issues.length === 0) safe.add(commit.hash);
     } catch {
       // A merge whose topology or expected tree cannot be proven remains untraced.
@@ -386,8 +386,8 @@ export async function auditHistory(
   schemaVersion: unknown = 1,
 ): Promise<{ issues: IntegrityIssue[]; checkpoints: HistoryCheckpoint[] }> {
   const contract = lifecycleContract(schemaVersion, "history contract");
-  const transportOnlyMerges = await transportOnlyMergeHashes(git, commits, contract);
   const replayCommitsInput = await hydrateLegacyRemediations(git, commits, contract);
+  const transportOnlyMerges = await transportOnlyMergeHashes(git, replayCommitsInput, contract);
   const replayed = replayCommits(replayCommitsInput, activeId, contract.schemaVersion, transportOnlyMerges);
   return { ...replayed, issues: [
     ...replayed.issues,

@@ -49,6 +49,38 @@ describe("versioned lifecycle contract", () => {
     };
     await expect(auditHistory(git as never, [intake, merge])).resolves.toMatchObject({ issues: [] });
   });
+  it("hydrates legacy remediation before validating a transport merge continuation", async () => {
+    const phases = ["intake", "explore", "assess", "specify", "plan", "decompose", "implement"];
+    const prefix = phases.map((phase, index) => commit(index + 1, phase));
+    const base = prefix.at(-1)!;
+    const legacy = commit(9, undefined, 1, "remediated");
+    const merge: CommitInfo = { hash: `${"10"}${"a".repeat(38)}`, subject: "legacy transport merge", body: "", trailers: {} };
+    const record = {
+      schemaVersion: 1,
+      workId: "lifecycle",
+      source: "review",
+      target: "implement",
+      reason: "repair",
+      evidence: {
+        kind: "review",
+        review: { schemaVersion: 1, workId: "lifecycle", reviewer: "reviewer", digest: "a".repeat(64), verdict: "fail", findings: [] },
+      },
+      priorCheckpoint: base.hash,
+      attempt: 1,
+      timestamp: "2026-01-01T00:00:00Z",
+    };
+    const git = {
+      isAncestor: async (candidate: string, parent: string) => parent === base.hash && (candidate === base.hash || prefix.some((entry) => entry.hash === candidate)),
+      parents: async () => [base.hash, legacy.hash],
+      treeId: async () => "tree",
+      mergedTree: async () => "tree",
+      run: async (args: readonly string[]) => args[0] === "rev-list" ? legacy.hash : args[0] === "show" ? JSON.stringify(record) : "",
+      commitInfo: async () => legacy,
+    };
+    const result = await auditHistory(git as never, [...prefix, legacy, merge]);
+    expect(result.checkpoints).toEqual(expect.arrayContaining([expect.objectContaining({ kind: "remediation", attempt: 1, target: "implement" })]));
+    expect(result.issues.map((issue) => issue.code)).not.toContain("history-broken-chain");
+  });
 
   it("keeps normal completion semantics and exposes recovery adjacency", () => {
     const phases = ["intake", "explore", "assess", "specify", "plan", "decompose", "implement", "review", "validate", "reconcile-memory", "close"];
