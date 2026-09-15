@@ -4,9 +4,9 @@
   "mode": "sdd",
   "id": "issue-11-named-checks",
   "status": "active",
-  "gateCommit": "4a2dedf1fbf9f7db213487eeb93ffc0c0a6cf133",
-  "updatedAt": "2026-09-15T07:03:45.331Z",
-  "phase": "specify",
+  "gateCommit": "2697b5fd5ae195a94eda5cb2ee7df5737640d2be",
+  "updatedAt": "2026-09-15T07:04:35.961Z",
+  "phase": "plan",
   "humanGate": false,
   "profile": "autonomous"
 }
