@@ -3,7 +3,7 @@ import { join } from "node:path";
 import { HARNESS_VERSION } from "../index.js";
 import { PLAN_DIR, SDD_DIR } from "../domain/constants.js";
 import type { ApprovalProfile, ExecutionMode, WorkState } from "../domain/types.js";
-import { runChecks } from "../check/check.js";
+import { failedCheckDetails, runChecks } from "../check/check.js";
 import { writeAtomic } from "../fs/files.js";
 import { GitRepository } from "../git/git.js";
 import { loadState, saveState } from "../state/store.js";
@@ -59,7 +59,10 @@ export async function finishPlan(cwd: string, subject: string, _legacyMemoryDisp
   if (!state || state.mode !== "plan" || !state.planPath) throw new Error("No active plan");
   if (!subject.trim()) throw new Error("A concise commit message is required");
   const checks = await runChecks(cwd);
-  if (checks.issues.length > 0 || checks.testExitCode !== 0) throw new Error("Checks failed; plan cannot close");
+  const namedFailures = failedCheckDetails(checks);
+  if (checks.issues.length > 0 || namedFailures.length > 0 || (!checks.checks && checks.testExitCode !== 0)) {
+    throw new Error(namedFailures.length > 0 ? namedFailures.join("\n") : "Checks failed; plan cannot close");
+  }
   await rm(join(cwd, state.planPath), { force: true });
   return closeWork(cwd, subject, { work: state.id, state: "completed" });
 }

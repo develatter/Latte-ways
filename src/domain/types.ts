@@ -25,6 +25,34 @@ export type FindingDisposition = "open" | "fixed" | "accepted" | "deferred";
 export type RemediationSource = "review" | "validate";
 export type RemediationTarget = "implement" | "decompose" | "plan" | "specify";
 
+export const CHECK_NAMES = ["test", "lint", "typecheck", "build", "e2e"] as const;
+export type CheckName = (typeof CHECK_NAMES)[number];
+export type CheckStatus = "passed" | "failed" | "timed-out" | "skipped" | "unavailable";
+
+export type CommandArgv = string[];
+
+/** Optional additive environment contract. Legacy testCommand remains the fallback. */
+export interface NamedChecksConfig {
+  test?: CommandArgv;
+  lint?: CommandArgv;
+  typecheck?: CommandArgv;
+  build?: CommandArgv;
+  e2e?: CommandArgv;
+  required: CheckName[];
+  timeoutMs?: number;
+}
+
+export interface NamedCheckResult {
+  name: CheckName;
+  status: CheckStatus;
+  command?: CommandArgv;
+  exitCode?: number;
+  detail?: string;
+}
+
+export type NamedCheckEvidence = NamedCheckResult;
+
+
 export interface TaskState {
   id: string;
   title: string;
@@ -65,11 +93,11 @@ export interface MemoryConfig {
   relevantPaths: string[];
   excludedPaths: string[];
 }
-
 export interface HarnessConfig {
   schemaVersion: 1;
   harnessVersion: string;
   testCommand: string[];
+  commands?: NamedChecksConfig;
   defaultBranch?: string;
   historySince?: string;
   memory?: MemoryConfig;
@@ -132,10 +160,14 @@ export interface ValidationFailureRecord {
   /** Immutable commit and tree on which the checks were run. */
   inputCommit: string;
   inputTree: string;
+  /** Legacy fallback command, retained for v1 records. */
   testCommand: string[];
+  /** Immutable selected named-check contract, absent on legacy records. */
+  commands?: NamedChecksConfig;
   checks: {
     integrity: Array<{ code: string; path: string; message: string }>;
     testExitCode?: number;
+    named?: NamedCheckEvidence[];
   };
   digest: string;
 }

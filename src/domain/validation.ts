@@ -3,7 +3,7 @@ import { fileURLToPath } from "node:url";
 import type { AnySchema, ErrorObject, ValidateFunction } from "ajv";
 import { Ajv2020 } from "ajv/dist/2020.js";
 import type { CoverageArea, MemorySource, MemoryState, ReconciliationEvidence } from "../memory/model.js";
-import type { ApprovalRecord, HarnessConfig, ManagedManifest, RemediationRecord, ReviewResult, ValidationFailureRecord, WorkState } from "./types.js";
+import { CHECK_NAMES, type ApprovalRecord, type HarnessConfig, type ManagedManifest, type RemediationRecord, type ReviewResult, type ValidationFailureRecord, type WorkState } from "./types.js";
 
 type SchemaName = "config" | "manifest" | "state" | "task" | "review" | "approval" | "remediation" | "validation-failure" | "coverage" | "memory-source" | "memory-state" | "reconciliation";
 
@@ -77,7 +77,11 @@ function validate(name: keyof typeof validators, value: unknown): ValidationResu
 }
 
 export function validateConfig(value: unknown): value is HarnessConfig {
-  return validate("config", value).valid;
+  const result = validate("config", value);
+  if (!result.valid) return false;
+  const config = value as HarnessConfig;
+  const commands = CHECK_NAMES.map((name) => config.commands?.[name]).filter((command): command is string[] => command !== undefined);
+  return commands.every((command) => command.every((part) => !part.includes("\0")));
 }
 
 export function validateManifest(value: unknown): value is ManagedManifest {
