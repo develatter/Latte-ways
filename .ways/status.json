@@ -1,5 +1,12 @@
 {
   "schemaVersion": 1,
-  "active": false,
-  "updatedAt": "2026-09-11T19:48:50.727Z"
+  "active": true,
+  "mode": "sdd",
+  "id": "prefactor-workflow-contracts",
+  "status": "active",
+  "gateCommit": "5ec67d6fa701261079e4e4fcdc24e19eba247383",
+  "updatedAt": "2026-09-15T19:44:05.721Z",
+  "phase": "explore",
+  "humanGate": false,
+  "profile": "autonomous"
 }
