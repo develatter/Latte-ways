@@ -243,11 +243,7 @@ async function hydrateLegacyRemediations(
       if (!details.valid) {
         const unsupported = details.errors.find((error) => error.includes("unsupported lifecycle contract version"));
         if (unsupported) {
-          try {
-            recordVersion(value, `legacy remediation record at ${path}`);
-          } catch (error) {
-            throw error;
-          }
+          recordVersion(value, `legacy remediation record at ${path}`);
           throw new LifecycleContractError("lifecycle-unsupported-version", unsupported);
         }
         return commit;
