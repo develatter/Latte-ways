@@ -44,6 +44,8 @@ import { remediateSdd } from "./work/remediation.js";
 import { recordValidationFailure } from "./work/validation-failure.js";
 import { addTask, integrateTask, prepareTask } from "./work/tasks.js";
 import { applyUpgrade, planUpgrade } from "./upgrade/upgrade.js";
+import { runEvals } from "./evals/runner.js";
+import { commandAdapter, fakeAdapter } from "./evals/adapters.js";
 
 function option(args: readonly string[], name: string): string | undefined {
   return args.find((arg) => arg.startsWith(`${name}=`))?.slice(name.length + 1);
@@ -234,6 +236,43 @@ export async function run(argv: readonly string[], cwd = process.cwd()): Promise
       return 0;
     }
     throw new Error("Usage: ways adapter list | install <provider> [--force]");
+  }
+
+  if (command === "evals") {
+    const [action] = args;
+    if (action !== "run") throw new Error("Usage: ways evals run [--adapter=fake|command] [--command=<executable>]");
+    const adapterName = option(args, "--adapter") ?? "fake";
+    const adapter = adapterName === "fake"
+      ? fakeAdapter
+      : adapterName === "command"
+        ? commandAdapter(requiredOption(args, "--command"), options(args, "--arg"))
+        : (() => { throw new Error(`Unknown eval adapter: ${adapterName}`); })();
+    const maxMilliseconds = Number(option(args, "--timeout-ms") ?? "30000");
+    const maxOutputBytes = Number(option(args, "--max-output-bytes") ?? "1048576");
+    const seed = Number(option(args, "--seed") ?? "0");
+    const corpusPath = option(args, "--corpus");
+    const harness = option(args, "--harness") ?? "checks-only";
+    if (harness !== "no-ways" && harness !== "checks-only") throw new Error("--harness must be no-ways or checks-only");
+    if (!Number.isSafeInteger(maxMilliseconds) || maxMilliseconds <= 0) throw new Error("--timeout-ms must be a positive integer");
+    if (!Number.isSafeInteger(maxOutputBytes) || maxOutputBytes <= 0) throw new Error("--max-output-bytes must be a positive integer");
+    if (!Number.isSafeInteger(seed) || seed < 0) throw new Error("--seed must be a non-negative integer");
+    const result = await runEvals({
+      ...(corpusPath ? { corpusPath } : {}),
+      adapter,
+      configuration: {
+        adapter: { id: adapter.id, argv: adapter.argv },
+        harness,
+        model: option(args, "--model") ?? "unspecified",
+        startingRevision: option(args, "--revision") ?? "corpus-v2",
+        budgets: { maxMilliseconds, maxOutputBytes },
+        seed,
+      },
+    });
+    const output = stableJson(result);
+    const outputPath = option(args, "--output");
+    if (outputPath) await writeAtomic(userPath(cwd, outputPath), output);
+    process.stdout.write(output);
+    return result.tasks.every((task) => task.success) ? 0 : 1;
   }
 
   if (command === "check") {

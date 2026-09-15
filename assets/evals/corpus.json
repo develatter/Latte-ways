@@ -1,0 +1,52 @@
+{
+  "schemaVersion": 1,
+  "id": "ways-small-coding-v2",
+  "revision": "corpus-v2",
+  "tasks": [
+    {
+      "id": "add-export",
+      "description": "Add a named export without changing the existing default behavior.",
+      "setup": [{ "path": "src/summary.js", "content": "export default function summary(value) { return String(value); }\n" }],
+      "prompt": "Add a named summarize export that returns the input as a string while preserving the default export.",
+      "success": [
+        { "id": "summarize-values", "command": ["node", "--input-type=module", "-e", "const m=await import('./src/summary.js'); if(m.summarize(4)!=='4'||m.summarize('x')!=='x'||m.summarize(false)!=='false') process.exit(1)"], "expectedExitCode": 0 },
+        { "id": "default-preserved", "command": ["node", "--input-type=module", "-e", "const m=await import('./src/summary.js'); if(m.default(4)!=='4') process.exit(1)"], "expectedExitCode": 0 }
+      ],
+      "regressions": [
+        { "id": "summary-module-loads", "command": ["node", "--input-type=module", "-e", "const m=await import('./src/summary.js'); if(typeof m.default!=='function') process.exit(1)"], "expectedExitCode": 0 }
+      ],
+      "fakePatch": [{ "path": "src/summary.js", "content": "export function summarize(value) { return String(value); }\nexport default function summary(value) { return String(value); }\n" }]
+    },
+    {
+      "id": "preserve-api",
+      "description": "Extend a tiny API while preserving its existing public function.",
+      "setup": [{ "path": "src/api.js", "content": "export function parse(value) { return Number(value); }\n" }],
+      "prompt": "Add an isNumeric export and keep the existing parse export available.",
+      "success": [
+        { "id": "numeric-values", "command": ["node", "--input-type=module", "-e", "const m=await import('./src/api.js'); if(!m.isNumeric('4')||!m.isNumeric(-2)||m.isNumeric('x')) process.exit(1)"], "expectedExitCode": 0 },
+        { "id": "parse-preserved", "command": ["node", "--input-type=module", "-e", "const m=await import('./src/api.js'); if(m.parse('4')!==4) process.exit(1)"], "expectedExitCode": 0 }
+      ],
+      "regressions": [
+        { "id": "api-module-loads", "command": ["node", "--input-type=module", "-e", "const m=await import('./src/api.js'); if(typeof m.parse!=='function') process.exit(1)"], "expectedExitCode": 0 }
+      ],
+      "fakePatch": [{ "path": "src/api.js", "content": "export function isNumeric(value) { return !Number.isNaN(Number(value)); }\nexport function parse(value) { return Number(value); }\n" }]
+    },
+    {
+      "id": "resume-session",
+      "description": "Resume an unfinished task in a fresh session and complete the implementation.",
+      "setup": [{ "path": "src/resume.js", "content": "export function normalize(value) { return value.trim(); }\n" }],
+      "prompt": "Begin adding normalizeUpper, then stop so another session can resume.",
+      "success": [
+        { "id": "upper-values", "command": ["node", "--input-type=module", "-e", "const m=await import('./src/resume.js'); if(m.normalizeUpper(' hi ')!=='HI'||m.normalizeUpper('bye')!=='BYE'||m.normalizeUpper(' 2 ')!=='2') process.exit(1)"], "expectedExitCode": 0 },
+        { "id": "normalize-preserved", "command": ["node", "--input-type=module", "-e", "const m=await import('./src/resume.js'); if(m.normalize(' hi ')!=='hi') process.exit(1)"], "expectedExitCode": 0 }
+      ],
+      "regressions": [
+        { "id": "resume-module-loads", "command": ["node", "--input-type=module", "-e", "const m=await import('./src/resume.js'); if(typeof m.normalize!=='function') process.exit(1)"], "expectedExitCode": 0 }
+      ],
+      "freshSessionResume": {
+        "prompt": "Resume the task and finish normalizeUpper.",
+        "fakePatch": [{ "path": "src/resume.js", "content": "export function normalize(value) { return value.trim(); }\nexport function normalizeUpper(value) { return normalize(value).toUpperCase(); }\n" }]
+      }
+    }
+  ]
+}
