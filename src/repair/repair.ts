@@ -1,5 +1,6 @@
 import { join } from "node:path";
-import { SDD_PHASES, type RemediationRecord, type SddPhase, type WorkState } from "../domain/types.js";
+import type { RemediationRecord, SddPhase, WorkState } from "../domain/types.js";
+import { workflowForState } from "../domain/workflow.js";
 import { validateRemediation } from "../domain/validation.js";
 import { STATE_PATH } from "../domain/constants.js";
 import { GitRepository } from "../git/git.js";
@@ -49,6 +50,7 @@ async function latestRemediation(git: GitRepository, checkpoints: readonly Histo
 export async function adoptHead(cwd: string): Promise<WorkState | undefined> {
   const state = await loadState(cwd);
   if (!state || state.mode !== "sdd") throw new Error("Adopt-head requires active SDD state");
+  const workflow = workflowForState(state);
   const git = new GitRepository(cwd);
   const checkpoints = await checkpointsAtHead(git, state);
   const checkpoint = checkpoints[checkpoints.length - 1];
@@ -66,7 +68,7 @@ export async function adoptHead(cwd: string): Promise<WorkState | undefined> {
       priorCheckpoint: record.priorCheckpoint, attempt: record.attempt, timestamp: record.timestamp,
     };
   } else {
-    const next = SDD_PHASES[SDD_PHASES.indexOf(checkpoint.phase) + 1];
+    const next = workflow.nextPhase(checkpoint.phase);
     if (!next) {
       await removeState(cwd);
       return undefined;

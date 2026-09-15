@@ -33,6 +33,7 @@ it("runs every SDD phase without allowing a skipped gate", async () => {
   const { cwd, git } = await setup();
   const work = "complete-flow";
   await startSdd(cwd, work, "autonomous");
+  expect((await loadState(cwd))?.workflowVersion).toBe(1);
   for (const phase of ["intake", "explore", "assess", "specify", "plan", "decompose", "implement"]) {
     await fill(cwd, work, phase);
     if (phase === "implement") await writeFile(join(cwd, "feature.ts"), "export const done = true;\n");

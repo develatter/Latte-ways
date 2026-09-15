@@ -142,8 +142,11 @@ export async function checkIntegrity(cwd: string): Promise<IntegrityIssue[]> {
             issues.push({ code: "prior-artifact-mutated", path: priorMutation, message: "Prior SDD attempt artifacts are immutable" });
           }
         }
-      } else if (activeState.mode === "quick") {
-        if (head !== activeState.baseCommit) issues.push({ code: "state-git-divergence", path: STATE_PATH, message: "Work HEAD changed outside a gate" });
+      } else if (activeState.mode === "quick" && head !== activeState.baseCommit) {
+        const commit = await git.lastCommit();
+        if (commit.trailers.work !== activeState.id || commit.trailers.state !== "downgraded-quick") {
+          issues.push({ code: "state-git-divergence", path: STATE_PATH, message: "Work HEAD changed outside a gate" });
+        }
       } else if (activeState.mode === "plan" && head !== activeState.baseCommit) {
         const commit = await git.lastCommit();
         if (commit.trailers.work !== activeState.id || commit.trailers.state !== "proposed") {

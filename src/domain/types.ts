@@ -1,20 +1,18 @@
 export const MODES = ["query", "quick", "plan", "sdd"] as const;
 export type Mode = (typeof MODES)[number];
 
-export const SDD_PHASES = [
-  "intake",
-  "explore",
-  "assess",
-  "specify",
-  "plan",
-  "decompose",
-  "implement",
-  "review",
-  "validate",
-  "reconcile-memory",
-  "close",
-] as const;
-export type SddPhase = (typeof SDD_PHASES)[number];
+export type SddPhase =
+  | "intake"
+  | "explore"
+  | "assess"
+  | "specify"
+  | "plan"
+  | "decompose"
+  | "implement"
+  | "review"
+  | "validate"
+  | "reconcile-memory"
+  | "close";
 
 export type WorkStatus = "active" | "blocked" | "completed" | "cancelled";
 export type ApprovalProfile = "autonomous" | "supervised";
@@ -77,6 +75,8 @@ export interface WorkState {
   updatedAt: string;
   profile?: ApprovalProfile;
   execution?: ExecutionMode;
+  /** Absent on legacy SDD state and therefore interpreted as workflow version one. */
+  workflowVersion?: number;
   phase?: SddPhase;
   lastCompletedPhase?: SddPhase;
   planPath?: string;
