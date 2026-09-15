@@ -347,6 +347,7 @@ describe("delegated execution", () => {
     const { downgradeSdd } = await import("../src/work/sdd.js");
     await downgradeSdd(cwd, "quick");
     expect((await loadState(cwd))?.execution).toBeUndefined();
+    expect((await checkIntegrity(cwd)).filter((issue) => issue.code === "state-git-divergence")).toEqual([]);
   });
 });
 

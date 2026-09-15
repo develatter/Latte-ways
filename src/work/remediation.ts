@@ -3,10 +3,12 @@ import { join } from "node:path";
 import type {
   RemediationEvidence,
   RemediationRecord,
+  RemediationSource,
   RemediationTarget,
   ReviewResult,
   WorkState,
 } from "../domain/types.js";
+import { workflowForState } from "../domain/workflow.js";
 import { validateRemediation, validateReview } from "../domain/validation.js";
 import { sha256, stableJson, writeAtomic } from "../fs/files.js";
 import { GitRepository } from "../git/git.js";
@@ -16,11 +18,12 @@ import { committedWorkDigest, implementationDigest } from "./digest.js";
 import { assertSddConsistency, createSddPhaseFile } from "./sdd.js";
 import { currentValidationFailureRecord, committedValidationFailureFailure, legacyValidationFailureReplayFailure } from "./validation-failure.js";
 
-function requireSource(state: WorkState | undefined): WorkState & { phase: "review" | "validate" } {
-  if (!state || state.mode !== "sdd" || (state.phase !== "review" && state.phase !== "validate")) {
-    throw new Error("SDD remediation is allowed only from review or validate");
+function requireSource(state: WorkState | undefined, target: RemediationTarget): WorkState & { phase: RemediationSource } {
+  if (!state || state.mode !== "sdd") throw new Error("SDD remediation requires active SDD work");
+  if (!workflowForState(state).canRemediate(state.phase, target)) {
+    throw new Error(`SDD remediation from ${state.phase ?? "no phase"} to ${target} is not allowed by workflow version ${workflowForState(state).version}`);
   }
-  return state as WorkState & { phase: "review" | "validate" };
+  return state as WorkState & { phase: RemediationSource };
 }
 
 async function changedPaths(git: GitRepository): Promise<Set<string>> {
@@ -169,7 +172,7 @@ export async function remediationEvidenceFailure(
 }
 
 export async function remediateSdd(cwd: string, target: RemediationTarget, reason: string): Promise<string> {
-  const state = requireSource(await loadState(cwd));
+  const state = requireSource(await loadState(cwd), target);
   const normalizedReason = reason.trim();
   if (!normalizedReason) throw new Error("A nonempty remediation reason is required");
 

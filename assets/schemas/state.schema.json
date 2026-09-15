@@ -16,6 +16,7 @@
     "updatedAt": { "type": "string", "format": "date-time" },
     "profile": { "enum": ["autonomous", "supervised"] },
     "execution": { "enum": ["inline", "delegated"] },
+    "workflowVersion": { "type": "integer", "minimum": 1, "maximum": 9007199254740991 },
     "phase": { "enum": ["intake", "explore", "assess", "specify", "plan", "decompose", "implement", "review", "validate", "reconcile-memory", "close"] },
     "lastCompletedPhase": { "$ref": "#/properties/phase" },
     "planPath": { "type": "string", "minLength": 1 },

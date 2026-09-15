@@ -2,22 +2,24 @@ import { readFile } from "node:fs/promises";
 import { join } from "node:path";
 import { createInterface } from "node:readline/promises";
 import { userInfo } from "node:os";
-import { SDD_PHASES, type ApprovalRecord, type SddPhase, type WorkState } from "../domain/types.js";
+import type { ApprovalRecord, WorkState } from "../domain/types.js";
+import { sddWorkflow, workflowForState } from "../domain/workflow.js";
 import { validateApproval } from "../domain/validation.js";
 import { stableJson, writeAtomic } from "../fs/files.js";
 import { GitRepository } from "../git/git.js";
-import { HUMAN_GATES } from "../state/status.js";
 import { loadState } from "../state/store.js";
 import { attemptApprovalPath, attemptNumber, attemptPhasePath } from "./attempt.js";
 import { workDigest } from "./digest.js";
 
 export function approvalPath(workId: string, phase: string, attempt?: number): string {
-  if (!SDD_PHASES.includes(phase as SddPhase)) throw new Error("Approval phase must be an SDD phase");
-  return attemptApprovalPath(workId, attempt, phase as SddPhase);
+  const workflow = sddWorkflow();
+  if (!workflow.isPhase(phase)) throw new Error("Approval phase must be an SDD phase");
+  return attemptApprovalPath(workId, attempt, phase);
 }
 
 export function requiresApproval(state: WorkState): boolean {
-  return state.mode === "sdd" && state.profile === "supervised" && state.phase !== undefined && HUMAN_GATES.has(state.phase);
+  return state.mode === "sdd" && state.profile === "supervised" && state.phase !== undefined
+    && workflowForState(state).isHumanGate(state.phase);
 }
 
 async function gateState(cwd: string): Promise<WorkState> {
@@ -105,6 +107,7 @@ export async function readApproval(cwd: string, workId: string, phase: string, a
     return undefined;
   }
 }
+
 
 export function approvalBinds(record: ApprovalRecord, expected: { workId: string; phase: string; gateCommit: string; digest?: string; attempt?: number | undefined }): string | undefined {
   if (record.workId !== expected.workId || record.phase !== expected.phase) return "approval belongs to another work or phase";

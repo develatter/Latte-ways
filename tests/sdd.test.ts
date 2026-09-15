@@ -42,6 +42,13 @@ describe("SDD machine", () => {
     expect((await loadState(cwd))?.phase).toBe("assess");
   });
 
+  it("fails closed when active state names an unknown workflow version", async () => {
+    const { cwd } = await repository();
+    const state = await startSdd(cwd, "future-workflow", "autonomous");
+    await writeFile(join(cwd, ".ways/state/current.json"), JSON.stringify({ ...state, workflowVersion: 2 }));
+    await expect(loadState(cwd)).rejects.toThrow(/Unsupported SDD workflow version 2; supported versions: 1/);
+  });
+
   it("requires approval at supervised human gates", async () => {
     const { cwd } = await repository();
     await startSdd(cwd, "safe-change", "supervised");

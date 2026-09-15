@@ -1,7 +1,8 @@
 import { mkdir } from "node:fs/promises";
 import { join, resolve } from "node:path";
 import { STATE_PATH, STATUS_PATH } from "../domain/constants.js";
-import { SDD_PHASES, type SddPhase, type TaskState, type WorkState } from "../domain/types.js";
+import type { TaskState, WorkState } from "../domain/types.js";
+import { workflowForState } from "../domain/workflow.js";
 import { stableJson, writeAtomic } from "../fs/files.js";
 import { GitRepository } from "../git/git.js";
 import { commitsAfter } from "../integrity/history.js";
@@ -168,6 +169,7 @@ export async function assertDelegatedCertificationTree(cwd: string, state: WorkS
 /** Enforce provenance from the current implementation cycle, not merely forgeable trailers or index contents. */
 export async function assertDelegatedImplementation(cwd: string, state: WorkState): Promise<void> {
   const attempt = attemptNumber(state.attempt);
+  const workflow = workflowForState(state);
   const currentTasks = state.tasks.filter((task) => taskAttempt(task) === attempt);
   if (currentTasks.length === 0) {
     throw new Error(attempt === 0
@@ -180,11 +182,10 @@ export async function assertDelegatedImplementation(cwd: string, state: WorkStat
   const anchor = attempt === 0 ? state.gateCommit : await remediationTransitionAnchor(git, state);
   let observedIntegration = false;
   for (const commit of await commitsAfter(git, anchor)) {
-    const certificationPhase = commit.trailers.phase as SddPhase | undefined;
+    const certificationPhase = commit.trailers.phase;
     const currentCertification = commit.trailers.work === state.id
       && commit.trailers.state === "completed"
-      && certificationPhase !== undefined
-      && SDD_PHASES.includes(certificationPhase)
+      && workflow.isPhase(certificationPhase)
       && taskAttemptTrailer(commit.trailers.attempt, attempt)
       && !commit.trailers.task;
     if (integrated.has(commit.hash)) {

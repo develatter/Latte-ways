@@ -1,5 +1,6 @@
 import { MANIFEST_PATH } from "../domain/constants.js";
-import { SDD_PHASES, type RemediationRecord, type RemediationTarget, type SddPhase } from "../domain/types.js";
+import type { RemediationRecord, RemediationTarget, SddPhase } from "../domain/types.js";
+import { sddWorkflow } from "../domain/workflow.js";
 import { validateRemediation } from "../domain/validation.js";
 import { loadConfig } from "../config/config.js";
 import { GitRepository, type CommitInfo } from "../git/git.js";
@@ -23,7 +24,6 @@ export interface HistoryCheckpoint {
   target?: RemediationTarget;
 }
 
-const REMEDIATION_TARGETS = new Set<RemediationTarget>(["implement", "decompose", "plan", "specify"]);
 
 export async function manifestIntroduction(git: GitRepository): Promise<string | undefined> {
   const output = await git.run(["log", "--format=%H", "--diff-filter=A", "--", MANIFEST_PATH]);
@@ -68,6 +68,7 @@ function parsedAttempt(value: string | undefined): number | undefined {
 
 /** Replay ordered SDD history. A set is insufficient because repeated and backward gates are invalid. */
 export function replayCommits(commits: readonly CommitInfo[], activeId?: string): { issues: IntegrityIssue[]; checkpoints: HistoryCheckpoint[] } {
+  const workflow = sddWorkflow();
   const issues: IntegrityIssue[] = [];
   const checkpoints: HistoryCheckpoint[] = [];
   const replay = new Map<string, ReplayState>();
@@ -85,7 +86,7 @@ export function replayCommits(commits: readonly CommitInfo[], activeId?: string)
     if (state === "opened") opened.set(work, commit.hash.slice(0, 12));
     else if (state === "completed" || state === "cancelled") opened.delete(work);
 
-    const current = replay.get(work) ?? { attempt: 0, nextPhase: "intake", validationFailed: false };
+    const current = replay.get(work) ?? { attempt: 0, nextPhase: workflow.initialPhase, validationFailed: false };
     if (commit.trailers.task && parsedAttempt(commit.trailers.attempt) !== current.attempt) {
       issue(issues, commit, "history-attempt-mismatch", `Task commit for ${work} does not belong to remediation attempt ${current.attempt}`);
       continue;
@@ -111,7 +112,7 @@ export function replayCommits(commits: readonly CommitInfo[], activeId?: string)
     if (remediationMatch) {
       const target = remediationMatch[1] as RemediationTarget;
       const attempt = parsedAttempt(commit.trailers.attempt);
-      if ((phase !== "review" && phase !== "validate") || phase !== current.nextPhase || !REMEDIATION_TARGETS.has(target)
+      if (phase !== current.nextPhase || !workflow.canRemediate(phase, target)
         || attempt === undefined || attempt !== current.attempt + 1) {
         issue(issues, commit, "history-invalid-remediation", `Remediation transition for ${work} is not a legal ${current.nextPhase} attempt ${current.attempt + 1} transition`);
         continue;
@@ -121,9 +122,9 @@ export function replayCommits(commits: readonly CommitInfo[], activeId?: string)
       continue;
     }
 
-    if (state !== "completed" || !phase || !SDD_PHASES.includes(phase as SddPhase)) continue;
+    if (state !== "completed" || !workflow.isPhase(phase)) continue;
     const attempt = parsedAttempt(commit.trailers.attempt);
-    const completed = phase as SddPhase;
+    const completed = phase;
     if (current.validationFailed) {
       issue(issues, commit, "history-broken-chain", `Certification of ${completed} for ${work} bypasses a validation failure in attempt ${current.attempt}; remediation is required`);
       continue;
@@ -132,7 +133,7 @@ export function replayCommits(commits: readonly CommitInfo[], activeId?: string)
       issue(issues, commit, "history-broken-chain", `Certification of ${completed} for ${work} is out of order for attempt ${current.attempt}; expected ${current.nextPhase}`);
       continue;
     }
-    const next = SDD_PHASES[SDD_PHASES.indexOf(completed) + 1];
+    const next = workflow.nextPhase(completed);
     if (next) replay.set(work, { attempt: current.attempt, nextPhase: next, validationFailed: false });
     else replay.delete(work);
     checkpoints.push({ work, attempt, kind: "certification", commit, phase: completed });

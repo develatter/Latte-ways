@@ -3,7 +3,8 @@ import { join } from "node:path";
 import { HARNESS_VERSION } from "../index.js";
 import { failedCheckDetails, runChecks } from "../check/check.js";
 import { PLAN_DIR, SDD_DIR, STATE_PATH } from "../domain/constants.js";
-import { SDD_PHASES, type ApprovalProfile, type ExecutionMode, type SddPhase, type WorkState } from "../domain/types.js";
+import type { ApprovalProfile, ExecutionMode, SddPhase, WorkState } from "../domain/types.js";
+import { sddWorkflow, workflowForState } from "../domain/workflow.js";
 import { validateState } from "../domain/validation.js";
 import { writeAtomic } from "../fs/files.js";
 import { GitRepository } from "../git/git.js";
@@ -47,6 +48,8 @@ export async function openSupervised(cwd: string, state: WorkState): Promise<voi
 }
 
 export async function assertSddConsistency(cwd: string, state: WorkState): Promise<void> {
+  const workflow = workflowForState(state);
+  if (!workflow.isPhase(state.phase)) throw new Error(`SDD workflow version ${workflow.version} has no active phase; run ways repair`);
   const git = new GitRepository(cwd);
   const head = await git.head();
   await assertProfileCommitted(git, state);
@@ -65,8 +68,9 @@ export async function assertSddConsistency(cwd: string, state: WorkState): Promi
       return;
     }
     const remediation = state.remediation;
-    if (!remediation || remediation.attempt !== attempt || state.phase !== remediation.target) {
-      throw new Error("Remediation state does not identify its reopened phase; run ways repair");
+    if (!remediation || remediation.attempt !== attempt || state.phase !== remediation.target
+      || !workflow.canRemediate(remediation.source, remediation.target)) {
+      throw new Error(`Remediation state does not identify a legal reopened phase in SDD workflow version ${workflow.version}; run ways repair`);
     }
     const transitionHash = await remediationTransitionCommit(git, state.id, remediation, head);
     const transition = await git.commitInfo(transitionHash);
@@ -117,7 +121,10 @@ export async function committedState(git: GitRepository): Promise<WorkState | un
 export function committedMismatch(committed: WorkState | undefined, state: WorkState): string | undefined {
   if (committed && committed.mode === "sdd") {
     if (committed.id !== state.id || committed.baseCommit !== state.baseCommit) return `HEAD records SDD work ${committed.id}; the state on disk was rewritten outside a gate`;
-    if (state.mode === "sdd" && committed.profile !== state.profile) return "SDD profile changed outside a gate";
+    if (state.mode === "sdd") {
+      if (workflowForState(committed).version !== workflowForState(state).version) return "SDD workflow version changed outside a gate";
+      if (committed.profile !== state.profile) return "SDD profile changed outside a gate";
+    }
   }
   if (state.mode === "sdd" && state.profile === "supervised" && !committed) return "Supervised work must be opened with a traced commit";
   return undefined;
@@ -135,6 +142,7 @@ export async function startSdd(cwd: string, id: string, profile: ApprovalProfile
   await git.assertClean();
   const head = await git.head();
   const now = new Date().toISOString();
+  const workflow = sddWorkflow();
   const state: WorkState = {
     schemaVersion: 1,
     harnessVersion: HARNESS_VERSION,
@@ -143,7 +151,8 @@ export async function startSdd(cwd: string, id: string, profile: ApprovalProfile
     status: "active",
     profile,
     ...(execution === "delegated" ? { execution } : {}),
-    phase: "intake",
+    workflowVersion: workflow.version,
+    phase: workflow.initialPhase,
     baseCommit: head,
     gateCommit: head,
     createdAt: now,
@@ -159,6 +168,7 @@ export async function startSdd(cwd: string, id: string, profile: ApprovalProfile
 export async function advanceSdd(cwd: string): Promise<string> {
   const state = await loadState(cwd);
   if (!state || state.mode !== "sdd" || !state.phase) throw new Error("No active SDD work");
+  const workflow = workflowForState(state);
   await assertSddConsistency(cwd, state);
   const validationGit = new GitRepository(cwd);
   if (state.phase === "validate" && await validationFailureCommit(validationGit, state)) {
@@ -186,8 +196,7 @@ export async function advanceSdd(cwd: string): Promise<string> {
   const git = new GitRepository(cwd);
   const previousHead = await git.head();
   const completed = state.phase;
-  const index = SDD_PHASES.indexOf(completed);
-  const next = SDD_PHASES[index + 1];
+  const next = workflow.nextPhase(completed);
 
   if (!next) {
     if (requiresApproval(state)) {
@@ -248,6 +257,7 @@ export async function downgradeSdd(cwd: string, target: "quick" | "plan"): Promi
   delete state.lastCompletedPhase;
   delete state.profile;
   delete state.execution;
+  delete state.workflowVersion;
   if (target === "plan") {
     state.planPath = `${PLAN_DIR}/${state.id}.md`;
     await writeAtomic(join(cwd, state.planPath), `---\ntype: plan\nstatus: proposed\nwork: ${state.id}\n---\n\n# Goal\n\n# Plan\n\n1. \n`);

@@ -28,11 +28,13 @@ it("repairs an explicit SDD state divergence from certified Git history", async 
   await writeFile(packet, (await readFile(packet, "utf8")).replace("Goal:", "Goal: repair").replace("Evidence:", "Evidence: test"));
   await advanceSdd(cwd);
   const state = (await loadState(cwd))!;
+  delete state.workflowVersion;
   state.gateCommit = "0000000";
   await saveState(cwd, state);
   expect((await diagnose(cwd)).consistent).toBe(false);
   await adoptHead(cwd);
   expect((await diagnose(cwd)).consistent).toBe(true);
+  expect((await loadState(cwd))?.workflowVersion).toBeUndefined();
 });
 
 it("adopts and rolls back to the latest additive remediation checkpoint", async () => {

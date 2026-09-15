@@ -2,10 +2,10 @@ import { readFile } from "node:fs/promises";
 import { join } from "node:path";
 import { STATUS_PATH } from "../domain/constants.js";
 import type { ApprovalProfile, ExecutionMode, Mode, RemediationMetadata, SddPhase, WorkState, WorkStatus } from "../domain/types.js";
+import { workflowForState } from "../domain/workflow.js";
 import { stableJson, writeAtomic } from "../fs/files.js";
 import { GitRepository } from "../git/git.js";
 
-export const HUMAN_GATES: ReadonlySet<SddPhase> = new Set<SddPhase>(["intake", "plan", "close"]);
 
 export interface StatusSummary {
   schemaVersion: 1;
@@ -37,7 +37,7 @@ export function projectStatus(state: WorkState | undefined, now = new Date().toI
   };
   if (state.phase) {
     summary.phase = state.phase;
-    summary.humanGate = state.profile === "supervised" && HUMAN_GATES.has(state.phase);
+    summary.humanGate = state.profile === "supervised" && state.mode === "sdd" && workflowForState(state).isHumanGate(state.phase);
   }
   if (state.profile) summary.profile = state.profile;
   if (state.execution) summary.execution = state.execution;

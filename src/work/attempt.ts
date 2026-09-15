@@ -1,5 +1,6 @@
 import { SDD_DIR } from "../domain/constants.js";
 import type { RemediationMetadata, SddPhase } from "../domain/types.js";
+import { sddWorkflow } from "../domain/workflow.js";
 import type { GitRepository } from "../git/git.js";
 
 /** v1 artifacts have no attempt field and remain in the original work directory. */
@@ -61,6 +62,7 @@ export async function remediationTransitionCommit(
   remediation: RemediationMetadata,
   descendant = "HEAD",
 ): Promise<string> {
+  const workflow = sddWorkflow();
   const candidates = (await git.run(["rev-list", "--reverse", "--ancestry-path", `${remediation.priorCheckpoint}..${descendant}`]))
     .split("\n").filter(Boolean);
   const transition = candidates[0];
@@ -69,9 +71,10 @@ export async function remediationTransitionCommit(
   }
   const info = await git.commitInfo(transition);
   const legacyTransition = info.trailers.state === "remediated";
-  if (info.trailers.work !== workId || (!legacyTransition && info.trailers.phase !== remediation.source)
+  if (info.trailers.work !== workId || !workflow.canRemediate(remediation.source, remediation.target)
+    || (!legacyTransition && info.trailers.phase !== remediation.source)
     || (!legacyTransition && info.trailers.state !== `remediated-${remediation.target}`) || info.trailers.attempt !== String(remediation.attempt)) {
-    throw new Error(`Remediation attempt ${remediation.attempt} transition identity does not match its metadata`);
+    throw new Error(`Remediation attempt ${remediation.attempt} transition identity does not match SDD workflow version ${workflow.version}`);
   }
   return transition;
 }
