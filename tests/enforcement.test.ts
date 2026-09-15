@@ -229,7 +229,7 @@ describe("history verification", () => {
     expect(await checkHistory(cwd, { since: "HEAD" })).toEqual([]);
   });
 
-  it("audits a pull request head without rejecting GitHub's synthetic merge commit", async () => {
+  it("accepts clean transport-only merges and rejects untraced merge resolution", async () => {
     const { cwd, git } = await repository();
     await startQuick(cwd, "pull-request");
     await writeFile(join(cwd, "pr.txt"), "change\n");
@@ -244,8 +244,20 @@ describe("history verification", () => {
     ]);
     await git.run(["reset", "--hard", merge]);
 
-    expect((await checkHistory(cwd)).map((issue) => issue.code)).toContain("history-untraced");
+    expect(await checkHistory(cwd)).toEqual([]);
     expect(await checkHistory(cwd, { to: pullRequestHead })).toEqual([]);
+
+    await writeFile(join(cwd, "untraced-resolution.txt"), "unexpected\n");
+    await git.run(["add", "untraced-resolution.txt"]);
+    const maliciousTree = await git.run(["write-tree"]);
+    const malicious = await git.run([
+      "commit-tree", maliciousTree,
+      "-p", base,
+      "-p", pullRequestHead,
+      "-m", "malicious merge resolution",
+    ]);
+    await git.run(["reset", "--hard", malicious]);
+    expect((await checkHistory(cwd)).map((issue) => issue.code)).toContain("history-untraced");
   });
 
   it("accepts a complete SDD certification chain", async () => {

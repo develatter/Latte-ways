@@ -3,13 +3,14 @@ import { join } from "node:path";
 import { HARNESS_VERSION } from "../index.js";
 import { failedCheckDetails, runChecks } from "../check/check.js";
 import { PLAN_DIR, SDD_DIR, STATE_PATH } from "../domain/constants.js";
-import { SDD_PHASES, type ApprovalProfile, type ExecutionMode, type SddPhase, type WorkState } from "../domain/types.js";
-import { validateState } from "../domain/validation.js";
+import { recordVersion } from "../domain/lifecycle.js";
+import { type ApprovalProfile, type ExecutionMode, type SddPhase, type WorkState } from "../domain/types.js";
+import { validateState, validationDetails } from "../domain/validation.js";
 import { writeAtomic } from "../fs/files.js";
 import { GitRepository } from "../git/git.js";
 import { loadState, removeState, saveState } from "../state/store.js";
 import { approvalPath, assertApproved, requiresApproval } from "./approve.js";
-import { attemptNumber, attemptPhasePath, remediationTransitionCommit } from "./attempt.js";
+import { attemptPhasePath, remediationTransitionCommit } from "./attempt.js";
 import { assertReviewPassed } from "./review.js";
 import { assertDelegatedCertificationTree, assertDelegatedImplementation } from "./tasks.js";
 import { committedValidationFailureFailure, validationFailureCommit } from "./validation-failure.js";
@@ -23,6 +24,8 @@ function phaseTemplate(phase: SddPhase): string {
 }
 
 export async function createSddPhaseFile(cwd: string, state: WorkState, phase: SddPhase): Promise<void> {
+  const contract = recordVersion(state, "SDD state");
+  if (!contract.isPhase(phase)) throw new Error(`Cannot create unknown SDD phase ${String(phase)}`);
   const path = join(cwd, phasePath(state, phase));
   await mkdir(join(path, ".."), { recursive: true });
   await writeAtomic(path, phaseTemplate(phase));
@@ -42,18 +45,24 @@ export async function isOpeningCommit(git: GitRepository, state: WorkState, hash
 }
 
 export async function openSupervised(cwd: string, state: WorkState): Promise<void> {
+  const contract = recordVersion(state, "SDD state");
   const git = new GitRepository(cwd);
-  await git.commit(await git.changedPaths(), `sdd(intake): open ${state.id} supervised`, { work: state.id, phase: "intake", state: "opened" });
+  await git.commit(await git.changedPaths(), `sdd(intake): open ${state.id} supervised`, {
+    work: state.id,
+    phase: contract.phases[0],
+    state: "opened",
+  });
 }
 
 export async function assertSddConsistency(cwd: string, state: WorkState): Promise<void> {
+  const contract = recordVersion(state, "SDD state");
   const git = new GitRepository(cwd);
   const head = await git.head();
   await assertProfileCommitted(git, state);
-  const attempt = attemptNumber(state.attempt);
+  const attempt = contract.attemptNumber(state.attempt);
   const failureCommit = await validationFailureCommit(git, state);
   if (failureCommit) {
-    if (state.phase !== "validate" || failureCommit !== head) {
+    if (state.phase !== contract.validationPhase || failureCommit !== head) {
       throw new Error("A committed validation failure requires remediation before this attempt can continue; run ways repair");
     }
     const failure = await committedValidationFailureFailure(git, state.id, attempt, failureCommit);
@@ -97,7 +106,7 @@ export async function assertSddConsistency(cwd: string, state: WorkState): Promi
   }
   const commit = (await git.recentCommits()).find((candidate) => candidate.trailers.work === state.id
     && candidate.trailers.phase === state.lastCompletedPhase && candidate.trailers.state === "completed"
-    && (attempt === 0 ? candidate.trailers.attempt === undefined : candidate.trailers.attempt === String(attempt)));
+    && contract.attemptTrailerMatches(candidate.trailers.attempt, attempt));
   if (!commit || !await git.isAncestor(commit.hash, head)) {
     throw new Error("HEAD does not contain certification for the previous SDD phase in the current attempt; run ways repair");
   }
@@ -105,12 +114,16 @@ export async function assertSddConsistency(cwd: string, state: WorkState): Promi
 }
 
 export async function committedState(git: GitRepository): Promise<WorkState | undefined> {
+  let value: unknown;
   try {
-    const value: unknown = JSON.parse(await git.run(["show", `HEAD:${STATE_PATH}`]));
-    return validateState(value) ? value : undefined;
+    value = JSON.parse(await git.run(["show", `HEAD:${STATE_PATH}`]));
   } catch {
     return undefined;
   }
+  if (!validateState(value)) {
+    throw new Error(`Committed state is invalid: ${validationDetails("state", value).errors.join("; ")}`);
+  }
+  return value;
 }
 
 /** The state committed at HEAD is the source of truth for identity and profile; the disk copy may only move through gates. */
@@ -124,6 +137,7 @@ export function committedMismatch(committed: WorkState | undefined, state: WorkS
 }
 
 async function assertProfileCommitted(git: GitRepository, state: WorkState): Promise<void> {
+  recordVersion(state, "SDD state");
   const failure = committedMismatch(await committedState(git), state);
   if (failure) throw new Error(`${failure}; run ways repair`);
 }
@@ -155,27 +169,26 @@ export async function startSdd(cwd: string, id: string, profile: ApprovalProfile
   if (profile === "supervised") await openSupervised(cwd, state);
   return state;
 }
-
 export async function advanceSdd(cwd: string): Promise<string> {
   const state = await loadState(cwd);
   if (!state || state.mode !== "sdd" || !state.phase) throw new Error("No active SDD work");
+  const contract = recordVersion(state, "SDD state");
   await assertSddConsistency(cwd, state);
   const validationGit = new GitRepository(cwd);
-  if (state.phase === "validate" && await validationFailureCommit(validationGit, state)) {
+  if (state.phase === contract.validationPhase && await validationFailureCommit(validationGit, state)) {
     throw new Error("A committed validation failure requires remediation before this attempt can pass validation");
   }
-  if (state.phase === "implement" && state.execution === "delegated") {
-    // Check both the index and worktree before creating the next phase or rewriting state.
+  if (state.phase === contract.implementPhase && state.execution === "delegated") {
     await assertDelegatedCertificationTree(cwd, state);
   }
   await assertPhaseFilled(cwd, state);
   if (requiresApproval(state)) await assertApproved(cwd, state);
-  if (state.phase === "implement" && state.tasks.some((task) => task.status !== "completed")) {
+  if (state.phase === contract.implementPhase && state.tasks.some((task) => task.status !== "completed")) {
     throw new Error("Every declared task must be integrated before implementation can complete");
   }
-  if (state.phase === "implement" && state.execution === "delegated") await assertDelegatedImplementation(cwd, state);
-  if (state.phase === "review") await assertReviewPassed(cwd, state);
-  if (state.phase === "validate" || state.phase === "close") {
+  if (state.phase === contract.implementPhase && state.execution === "delegated") await assertDelegatedImplementation(cwd, state);
+  if (state.phase === contract.reviewPhase) await assertReviewPassed(cwd, state);
+  if (state.phase === contract.validationPhase || state.phase === contract.phases.at(-1)) {
     const checks = await runChecks(cwd);
     const failures = failedCheckDetails(checks);
     if (checks.issues.length > 0 || failures.length > 0 || (!checks.checks && checks.testExitCode !== 0)) {
@@ -186,14 +199,14 @@ export async function advanceSdd(cwd: string): Promise<string> {
   const git = new GitRepository(cwd);
   const previousHead = await git.head();
   const completed = state.phase;
-  const index = SDD_PHASES.indexOf(completed);
-  const next = SDD_PHASES[index + 1];
-
+  const next = contract.nextPhase(completed);
   if (!next) {
+    const closePhase = contract.phases[contract.phases.length - 1]!;
     if (requiresApproval(state)) {
       // The closing commit removes the SDD folder, so the close approval is committed first and its deletion is what the hook verifies.
-      await git.commit([approvalPath(state.id, "close", state.attempt)], `sdd(close): record approval of ${state.id}`, {
-        work: state.id, phase: "close", state: "approved", ...(attemptNumber(state.attempt) > 0 ? { attempt: String(state.attempt) } : {}),
+      await git.commit([approvalPath(state.id, closePhase, state.attempt)], `sdd(close): record approval of ${state.id}`, {
+        work: state.id, phase: closePhase, state: "approved",
+        ...(contract.attemptNumber(state.attempt) > 0 ? { attempt: String(contract.attemptNumber(state.attempt)) } : {}),
       });
     }
     for (const task of state.tasks) {
@@ -229,7 +242,7 @@ export async function advanceSdd(cwd: string): Promise<string> {
     work: state.id,
     phase: completed,
     state: "completed",
-    ...(attemptNumber(state.attempt) > 0 ? { attempt: String(state.attempt) } : {}),
+    ...(contract.attemptNumber(state.attempt) > 0 ? { attempt: String(contract.attemptNumber(state.attempt)) } : {}),
   });
 }
 

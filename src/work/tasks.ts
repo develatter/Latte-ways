@@ -1,44 +1,47 @@
 import { mkdir } from "node:fs/promises";
 import { join, resolve } from "node:path";
 import { STATE_PATH, STATUS_PATH } from "../domain/constants.js";
-import { SDD_PHASES, type SddPhase, type TaskState, type WorkState } from "../domain/types.js";
+import { recordVersion, type LifecycleContract } from "../domain/lifecycle.js";
+import type { TaskState, WorkState } from "../domain/types.js";
 import { stableJson, writeAtomic } from "../fs/files.js";
-import { GitRepository } from "../git/git.js";
 import { commitsAfter } from "../integrity/history.js";
+import { GitRepository } from "../git/git.js";
 import { loadState, saveState } from "../state/store.js";
-import { attemptNumber, attemptPhasePath, isPriorAttemptArtifact, remediationTransitionCommit } from "./attempt.js";
+import { attemptPhasePath, isPriorAttemptArtifact, remediationTransitionCommit } from "./attempt.js";
 
 function requireSdd(state: WorkState | undefined): WorkState {
   if (!state || state.mode !== "sdd") throw new Error("No active SDD work");
   return state;
 }
 
-function taskAttempt(task: TaskState): number {
-  return attemptNumber(task.attempt);
+function taskAttempt(task: TaskState, contract: LifecycleContract): number {
+  return contract.attemptNumber(task.attempt, `task ${task.id}`);
 }
 
-function requireCurrentTask(state: WorkState, id: string): TaskState {
+function requireCurrentTask(state: WorkState, id: string, contract: LifecycleContract): TaskState {
   const task = state.tasks.find((candidate) => candidate.id === id);
   if (!task) throw new Error(`Unknown task: ${id}`);
-  const currentAttempt = attemptNumber(state.attempt);
-  if (taskAttempt(task) !== currentAttempt) {
-    throw new Error(`Task ${id} belongs to attempt ${taskAttempt(task)} and is immutable during attempt ${currentAttempt}`);
+  const currentAttempt = contract.attemptNumber(state.attempt);
+  const existingAttempt = taskAttempt(task, contract);
+  if (existingAttempt !== currentAttempt) {
+    throw new Error(`Task ${id} belongs to attempt ${existingAttempt} and is immutable during attempt ${currentAttempt}`);
   }
   return task;
 }
 
-function taskAttemptTrailer(infoAttempt: string | undefined, attempt: number): boolean {
-  return infoAttempt === String(attempt) || (attempt === 0 && infoAttempt === undefined);
+function canAddTask(state: WorkState, contract: LifecycleContract): boolean {
+  return state.phase === contract.decomposePhase
+    || (state.phase === contract.implementPhase && contract.attemptNumber(state.attempt) > 0 && state.remediation?.attempt === state.attempt);
 }
 
-function canAddTask(state: WorkState): boolean {
-  return state.phase === "decompose"
-    || (state.phase === "implement" && attemptNumber(state.attempt) > 0 && state.remediation?.attempt === state.attempt);
+function taskAttemptTrailer(value: string | undefined, attempt: number, contract: LifecycleContract): boolean {
+  return contract.attemptTrailerMatches(value, attempt);
 }
 
 export async function addTask(cwd: string, id: string, title: string, dependsOn: string[] = []): Promise<TaskState> {
   const state = requireSdd(await loadState(cwd));
-  if (!canAddTask(state)) throw new Error("Tasks can only be defined during decompose or remediated implement");
+  const contract = recordVersion(state, "SDD state");
+  if (!canAddTask(state, contract)) throw new Error("Tasks can only be defined during decompose or remediated implement");
   if (!/^[a-z0-9][a-z0-9-]{0,62}$/.test(id)) throw new Error("Task id must be a lowercase slug");
   if (!title.trim()) throw new Error("Task title is required");
   if (state.tasks.some((task) => task.id === id)) throw new Error(`Task already exists: ${id}`);
@@ -48,7 +51,7 @@ export async function addTask(cwd: string, id: string, title: string, dependsOn:
   const task: TaskState = {
     id,
     title: title.trim(),
-    attempt: attemptNumber(state.attempt),
+    attempt: contract.attemptNumber(state.attempt),
     status: dependsOn.some((dependency) => state.tasks.find((task) => task.id === dependency)?.status !== "completed") ? "pending" : "ready",
     dependsOn,
     commits: [],
@@ -58,17 +61,17 @@ export async function addTask(cwd: string, id: string, title: string, dependsOn:
   await saveState(cwd, state);
   return task;
 }
-
 export async function prepareTask(cwd: string, id: string): Promise<TaskState> {
   const state = requireSdd(await loadState(cwd));
-  if (state.phase !== "implement") throw new Error("Task worktrees can only be prepared during implement");
-  const task = requireCurrentTask(state, id);
+  const contract = recordVersion(state, "SDD state");
+  if (state.phase !== contract.implementPhase) throw new Error("Task worktrees can only be prepared during implement");
+  const task = requireCurrentTask(state, id, contract);
   const incomplete = task.dependsOn.filter((dependency) => state.tasks.find((candidate) => candidate.id === dependency)?.status !== "completed");
   if (incomplete.length > 0) throw new Error(`Incomplete dependencies: ${incomplete.join(", ")}`);
   if (task.worktree) throw new Error(`Task already prepared: ${id}`);
   if (task.status !== "ready") throw new Error(`Task is not ready: ${id}`);
 
-  const attempt = attemptNumber(state.attempt);
+  const attempt = contract.attemptNumber(state.attempt);
   const git = new GitRepository(cwd);
   const branch = `ways/${state.id}/attempt-${attempt}/${task.id}`;
   const worktree = join(cwd, ".ways", "worktrees", state.id, `attempt-${attempt}`, task.id);
@@ -99,15 +102,16 @@ async function priorArtifactChangedBy(git: GitRepository, commit: string, workId
 
 export async function integrateTask(cwd: string, id: string, commits: string[]): Promise<TaskState> {
   const state = requireSdd(await loadState(cwd));
-  if (state.phase !== "implement") throw new Error("Tasks can only be integrated during implement");
-  const task = requireCurrentTask(state, id);
+  const contract = recordVersion(state, "SDD state");
+  if (state.phase !== contract.implementPhase) throw new Error("Tasks can only be integrated during implement");
+  const task = requireCurrentTask(state, id, contract);
   if (task.status !== "active" || !task.branch || !task.worktree) throw new Error(`Task must be prepared before integration: ${id}`);
   if (commits.length === 0) throw new Error("At least one commit is required");
-  const attempt = attemptNumber(state.attempt);
+  const attempt = contract.attemptNumber(state.attempt);
   const git = new GitRepository(cwd);
   for (const commit of commits) {
     const info = await git.commitInfo(commit);
-    if (info.trailers.work !== state.id || info.trailers.task !== task.id || !taskAttemptTrailer(info.trailers.attempt, attempt)) {
+    if (info.trailers.work !== state.id || info.trailers.task !== task.id || !taskAttemptTrailer(info.trailers.attempt, attempt, contract)) {
       throw new Error(`Commit ${commit} lacks matching work/task/attempt trailers`);
     }
     if (!await git.isAncestor(info.hash, task.branch)) {
@@ -123,7 +127,7 @@ export async function integrateTask(cwd: string, id: string, commits: string[]):
   }
   task.status = "completed";
   for (const candidate of state.tasks) {
-    if (taskAttempt(candidate) === attempt && candidate.status === "pending" && candidate.dependsOn.every((dependency) => state.tasks.find((item) => item.id === dependency)?.status === "completed")) {
+    if (taskAttempt(candidate, contract) === attempt && candidate.status === "pending" && candidate.dependsOn.every((dependency) => state.tasks.find((item) => item.id === dependency)?.status === "completed")) {
       candidate.status = "ready";
     }
   }
@@ -132,9 +136,9 @@ export async function integrateTask(cwd: string, id: string, commits: string[]):
   return task;
 }
 
-async function remediationTransitionAnchor(git: GitRepository, state: WorkState): Promise<string> {
+async function remediationTransitionAnchor(git: GitRepository, state: WorkState, contract: LifecycleContract): Promise<string> {
   const remediation = state.remediation;
-  const attempt = attemptNumber(state.attempt);
+  const attempt = contract.attemptNumber(state.attempt);
   if (!remediation || remediation.attempt !== attempt || attempt === 0) throw new Error("Remediated delegated execution lacks current attempt metadata");
   try {
     return await remediationTransitionCommit(git, state.id, remediation);
@@ -144,11 +148,12 @@ async function remediationTransitionAnchor(git: GitRepository, state: WorkState)
 }
 
 export async function assertDelegatedCertificationTree(cwd: string, state: WorkState): Promise<void> {
+  const contract = recordVersion(state, "SDD state");
   const git = new GitRepository(cwd);
   const allowed = new Set([
     STATE_PATH,
     STATUS_PATH,
-    attemptPhasePath(state.id, state.attempt, "implement"),
+    attemptPhasePath(state.id, state.attempt, contract.implementPhase),
   ]);
   const commands = [
     ["diff", "--name-only"],
@@ -167,8 +172,9 @@ export async function assertDelegatedCertificationTree(cwd: string, state: WorkS
 
 /** Enforce provenance from the current implementation cycle, not merely forgeable trailers or index contents. */
 export async function assertDelegatedImplementation(cwd: string, state: WorkState): Promise<void> {
-  const attempt = attemptNumber(state.attempt);
-  const currentTasks = state.tasks.filter((task) => taskAttempt(task) === attempt);
+  const contract = recordVersion(state, "SDD state");
+  const attempt = contract.attemptNumber(state.attempt);
+  const currentTasks = state.tasks.filter((task) => taskAttempt(task, contract) === attempt);
   if (currentTasks.length === 0) {
     throw new Error(attempt === 0
       ? "Delegated execution requires at least one task; declare tasks during decompose"
@@ -177,15 +183,14 @@ export async function assertDelegatedImplementation(cwd: string, state: WorkStat
   const integrated = new Set(currentTasks.flatMap((task) => task.commits));
 
   const git = new GitRepository(cwd);
-  const anchor = attempt === 0 ? state.gateCommit : await remediationTransitionAnchor(git, state);
+  const anchor = attempt === 0 ? state.gateCommit : await remediationTransitionAnchor(git, state, contract);
   let observedIntegration = false;
   for (const commit of await commitsAfter(git, anchor)) {
-    const certificationPhase = commit.trailers.phase as SddPhase | undefined;
+    const certificationPhase = commit.trailers.phase;
     const currentCertification = commit.trailers.work === state.id
       && commit.trailers.state === "completed"
-      && certificationPhase !== undefined
-      && SDD_PHASES.includes(certificationPhase)
-      && taskAttemptTrailer(commit.trailers.attempt, attempt)
+      && contract.isPhase(certificationPhase)
+      && contract.attemptTrailerMatches(commit.trailers.attempt, attempt)
       && !commit.trailers.task;
     if (integrated.has(commit.hash)) {
       observedIntegration = true;

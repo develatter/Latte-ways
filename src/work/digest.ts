@@ -2,9 +2,10 @@ import { createHash } from "node:crypto";
 import { readFile } from "node:fs/promises";
 import { join } from "node:path";
 import { SDD_DIR, STATE_PATH, STATUS_PATH } from "../domain/constants.js";
+import { recordVersion } from "../domain/lifecycle.js";
 import type { WorkState } from "../domain/types.js";
 import { GitRepository } from "../git/git.js";
-import { attemptNumber, remediationTransitionCommit } from "./attempt.js";
+import { remediationTransitionCommit } from "./attempt.js";
 
 /** Paths the harness rewrites on its own; they never count as reviewed or approved content. */
 const BOOKKEEPING = [STATUS_PATH, `${STATE_PATH}`];
@@ -64,8 +65,9 @@ export async function workDigest(cwd: string, since: string): Promise<string> {
  * transition record; attempt zero begins after its decompose certification.
  */
 export async function implementationCycleBaseline(cwd: string, state: WorkState): Promise<string> {
+  const contract = recordVersion(state, "SDD state");
   const git = new GitRepository(cwd);
-  const attempt = attemptNumber(state.attempt);
+  const attempt = contract.attemptNumber(state.attempt);
   if (attempt > 0) {
     if (!state.remediation || state.remediation.attempt !== attempt) {
       throw new Error(`Remediation attempt ${attempt} has no matching transition metadata`);
@@ -73,8 +75,8 @@ export async function implementationCycleBaseline(cwd: string, state: WorkState)
     return remediationTransitionCommit(git, state.id, state.remediation);
   }
 
-  const decompose = await git.findCertification(state.id, "decompose");
-  if (!decompose) throw new Error("Review digest requires a completed decompose phase");
+  const decompose = await git.findCertification(state.id, contract.decomposePhase);
+  if (!decompose) throw new Error(`Review digest requires a completed ${contract.decomposePhase} phase`);
   return decompose.hash;
 }
 

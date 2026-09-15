@@ -1,12 +1,17 @@
 import { SDD_DIR } from "../domain/constants.js";
+import { attemptNumber, lifecycleContract, type LifecycleContract } from "../domain/lifecycle.js";
 import type { RemediationMetadata, SddPhase } from "../domain/types.js";
 import type { GitRepository } from "../git/git.js";
 
+export { attemptNumber } from "../domain/lifecycle.js";
+
 /** v1 artifacts have no attempt field and remain in the original work directory. */
-export function attemptNumber(attempt: number | undefined): number {
-  const value = attempt ?? 0;
-  if (!Number.isSafeInteger(value) || value < 0) throw new Error("Attempt must be a non-negative integer");
-  return value;
+function normalizedAttempt(attempt: number | undefined, contract: LifecycleContract): number {
+  return contract.attemptNumber(attempt);
+}
+
+function defaultContract(context: string): LifecycleContract {
+  return lifecycleContract(1, context);
 }
 
 function workDirectory(workId: string): string {
@@ -18,8 +23,8 @@ function workDirectory(workId: string): string {
  * Returns the directory for an attempt. Attempt zero deliberately uses the v1
  * layout so existing phase, review, and approval artifacts remain readable.
  */
-export function attemptArtifactDirectory(workId: string, attempt: number | undefined): string {
-  const normalized = attemptNumber(attempt);
+export function attemptArtifactDirectory(workId: string, attempt: number | undefined, contract = defaultContract("attempt artifact")): string {
+  const normalized = normalizedAttempt(attempt, contract);
   const root = workDirectory(workId);
   return normalized === 0 ? root : `${root}/attempts/${normalized}`;
 }

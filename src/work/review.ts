@@ -1,10 +1,11 @@
 import { readFile } from "node:fs/promises";
 import { join } from "node:path";
+import { recordVersion, type LifecycleContract } from "../domain/lifecycle.js";
 import type { ReviewResult, WorkState } from "../domain/types.js";
 import { validateReview, validationDetails } from "../domain/validation.js";
 import { stableJson, writeAtomic } from "../fs/files.js";
 import { loadState } from "../state/store.js";
-import { attemptNumber, attemptReviewPath } from "./attempt.js";
+import { attemptReviewPath } from "./attempt.js";
 import { implementationDigest } from "./digest.js";
 
 export function reviewBlocks(result: ReviewResult): string[] {
@@ -17,19 +18,20 @@ export function reviewBlocks(result: ReviewResult): string[] {
   return [...new Set(blockers)];
 }
 
-function reviewAttemptFailure(value: ReviewResult, state: WorkState): string | undefined {
-  if (attemptNumber(value.attempt) !== attemptNumber(state.attempt)) return "Review attempt does not match the active remediation attempt";
+function reviewAttemptFailure(value: ReviewResult, state: WorkState, contract: LifecycleContract): string | undefined {
+  if (contract.attemptNumber(value.attempt) !== contract.attemptNumber(state.attempt)) return "Review attempt does not match the active remediation attempt";
   return undefined;
 }
 
 export async function submitReview(cwd: string, inputPath: string): Promise<ReviewResult> {
   const state = await loadState(cwd);
   if (!state || state.mode !== "sdd" || state.phase !== "review") throw new Error("Reviews are accepted only during the review phase");
+  const contract = recordVersion(state, "SDD state");
   const value: unknown = JSON.parse(await readFile(inputPath, "utf8"));
   if (!validateReview(value)) throw new Error(`Invalid review: ${validationDetails("review", value).errors.join("; ")}`);
   if (value.workId !== state.id) throw new Error("Review work id does not match active work");
   if (!value.reviewer.trim()) throw new Error("Independent reviewer identity is required");
-  const attemptFailure = reviewAttemptFailure(value, state);
+  const attemptFailure = reviewAttemptFailure(value, state, contract);
   if (attemptFailure) throw new Error(attemptFailure);
   const digest = await implementationDigest(cwd, state);
   if (value.digest !== digest) throw new Error(`Review digest ${value.digest.slice(0, 12)} does not match the current diff ${digest.slice(0, 12)}; review the current content and obtain it with \`ways review digest\``);
@@ -45,6 +47,7 @@ export async function reviewDigest(cwd: string): Promise<string> {
 }
 
 export async function assertReviewPassed(cwd: string, state: WorkState): Promise<void> {
+  const contract = recordVersion(state, "SDD state");
   const path = join(cwd, attemptReviewPath(state.id, state.attempt));
   let value: unknown;
   try {
@@ -52,8 +55,8 @@ export async function assertReviewPassed(cwd: string, state: WorkState): Promise
   } catch {
     throw new Error("A delegated review result is required");
   }
-  if (!validateReview(value)) throw new Error("Latest review is invalid");
-  const attemptFailure = reviewAttemptFailure(value, state);
+  if (!validateReview(value)) throw new Error(`Latest review is invalid: ${validationDetails("review", value).errors.join("; ")}`);
+  const attemptFailure = reviewAttemptFailure(value, state, contract);
   if (attemptFailure) throw new Error(attemptFailure);
   const blockers = reviewBlocks(value);
   if (blockers.length > 0) throw new Error(`Review gate blocked by: ${blockers.join(", ")}`);

@@ -2,11 +2,12 @@ import { mkdir, mkdtemp, rm } from "node:fs/promises";
 import { join } from "node:path";
 import { runChecks, type CheckResult } from "../check/check.js";
 import { loadConfig } from "../config/config.js";
+import { recordVersion } from "../domain/lifecycle.js";
 import type { LegacyValidationFailureEvidence, ValidationFailureRecord, WorkState } from "../domain/types.js";
-import { validateConfig, validateValidationFailure } from "../domain/validation.js";
+import { validateConfig, validateValidationFailure, validationDetails } from "../domain/validation.js";
 import { sha256, stableJson, writeAtomic } from "../fs/files.js";
 import { GitRepository } from "../git/git.js";
-import { attemptNumber, validationFailureRecordPath } from "./attempt.js";
+import { validationFailureRecordPath } from "./attempt.js";
 
 function canonicalChecks(result: CheckResult): ValidationFailureRecord["checks"] {
   return {
@@ -40,9 +41,12 @@ export function legacyValidationEvidence(result: CheckResult): LegacyValidationF
 export function validationFailureDigest(record: Omit<ValidationFailureRecord, "digest">): string {
   return sha256(stableJson(record));
 }
-
 export function validationFailureRecordFailure(record: ValidationFailureRecord): string | undefined {
-  if (!validateValidationFailure(record)) return "validation failure record is invalid";
+  const contract = recordVersion(record, "validation failure record");
+  if (!validateValidationFailure(record)) {
+    return `validation failure record is invalid: ${validationDetails("validation-failure", record).errors.join("; ")}`;
+  }
+  if (record.phase !== contract.validationPhase) return `validation failure record phase must be ${contract.validationPhase}`;
   if (record.commands && record.checks.integrity.length === 0
     && (!record.checks.named || !record.checks.named.some((check) => check.status === "failed" || check.status === "timed-out" || check.status === "unavailable"))) {
     return "named validation failure record has no failed, timed-out, or unavailable check";
@@ -81,6 +85,7 @@ async function replayCleanupFailure(git: GitRepository, replayCwd: string): Prom
 }
 
 export async function validationFailureReplayFailure(git: GitRepository, record: ValidationFailureRecord): Promise<string | undefined> {
+  recordVersion(record, "validation failure record");
   const root = await git.root();
   const runtime = join(root, ".ways", "runtime");
   await mkdir(runtime, { recursive: true });
@@ -151,13 +156,13 @@ export async function legacyValidationFailureReplayFailure(
 
 /** Find any validation-failed commit in the active attempt, including malformed evidence that must fail closed. */
 export async function validationFailureCommit(git: GitRepository, state: WorkState): Promise<string | undefined> {
-  const attempt = attemptNumber(state.attempt);
+  const contract = recordVersion(state, "SDD state");
+  const attempt = contract.attemptNumber(state.attempt);
   const baseline = attempt === 0 ? state.baseCommit : state.remediation?.priorCheckpoint;
   if (!baseline) return undefined;
   for (const hash of (await git.run(["rev-list", `${baseline}..HEAD`])).split("\n").filter(Boolean)) {
     const info = await git.commitInfo(hash);
-    // A no-verify marker for the active work is evidence of a possible failed
-    // validation. Its malformed phase or attempt must not make it disappear.
+    // A no-verify marker for the active work is evidence of a possible failed validation.
     if (info.trailers.work === state.id && info.trailers.state === "validation-failed") return hash;
   }
   return undefined;
@@ -166,8 +171,13 @@ export async function validationFailureCommit(git: GitRepository, state: WorkSta
 async function committedFailureRecord(git: GitRepository, workId: string, attempt: number, commit: string): Promise<ValidationFailureRecord | undefined> {
   try {
     const value: unknown = JSON.parse(await git.run(["show", `${commit}:${validationFailureRecordPath(workId, attempt)}`]));
-    return validateValidationFailure(value) ? value : undefined;
-  } catch {
+    if (validateValidationFailure(value)) return value;
+    const details = validationDetails("validation-failure", value);
+    const versionError = details.errors.find((error) => error.includes("unsupported lifecycle contract version"));
+    if (versionError) throw new Error(versionError);
+    return undefined;
+  } catch (error) {
+    if (error instanceof Error && error.message.includes("unsupported lifecycle contract version")) throw error;
     return undefined;
   }
 }
@@ -179,8 +189,9 @@ export async function committedValidationFailureFailure(
   attempt: number,
   commit: string,
 ): Promise<string | undefined> {
+  const contract = recordVersion({ schemaVersion: 1 }, "validation failure contract");
   const record = await committedFailureRecord(git, workId, attempt, commit);
-  if (!record || record.workId !== workId || record.attempt !== attempt || record.phase !== "validate") {
+  if (!record || record.workId !== workId || record.attempt !== attempt || record.phase !== contract.validationPhase) {
     return `validation failure record is missing or mismatched at ${validationFailureRecordPath(workId, attempt)}`;
   }
   const invalid = validationFailureRecordFailure(record);
@@ -196,7 +207,8 @@ export async function committedValidationFailureFailure(
   }
   const info = await git.commitInfo(commit);
   const expectedAttempt = attempt === 0 ? undefined : String(attempt);
-  if (info.trailers.work !== workId || info.trailers.phase !== "validate" || info.trailers.state !== "validation-failed" || info.trailers.attempt !== expectedAttempt) {
+  if (info.trailers.work !== workId || info.trailers.phase !== contract.validationPhase || info.trailers.state !== "validation-failed"
+    || info.trailers.attempt !== expectedAttempt) {
     return "validation failure record commit trailers do not identify its work, attempt, and phase";
   }
   const path = validationFailureRecordPath(workId, attempt);
@@ -216,7 +228,8 @@ export async function committedValidationFailureFailure(
 }
 
 export async function currentValidationFailureRecord(git: GitRepository, state: WorkState): Promise<ValidationFailureRecord> {
-  const attempt = attemptNumber(state.attempt);
+  const contract = recordVersion(state, "SDD state");
+  const attempt = contract.attemptNumber(state.attempt);
   const head = await git.head();
   const failure = await committedValidationFailureFailure(git, state.id, attempt, head);
   if (failure) throw new Error(`A committed validation failure record is required for remediation: ${failure}`);
@@ -229,13 +242,16 @@ export async function currentValidationFailureRecord(git: GitRepository, state: 
 export async function recordValidationFailure(cwd: string): Promise<ValidationFailureRecord | undefined> {
   const { loadState } = await import("../state/store.js");
   const state = await loadState(cwd);
-  if (!state || state.mode !== "sdd" || state.phase !== "validate") throw new Error("Validation recording requires an active SDD validate phase");
+  if (!state || state.mode !== "sdd") throw new Error("Validation recording requires an active SDD validate phase");
+  const contract = recordVersion(state, "SDD state");
+  if (state.phase !== contract.validationPhase) throw new Error("Validation recording requires an active SDD validate phase");
   const { assertSddConsistency } = await import("./sdd.js");
   await assertSddConsistency(cwd, state);
   const git = new GitRepository(cwd);
   await git.assertClean();
   const inputCommit = await git.head();
-  const path = validationFailureRecordPath(state.id, state.attempt);
+  const attempt = contract.attemptNumber(state.attempt);
+  const path = validationFailureRecordPath(state.id, attempt);
   try {
     await git.run(["cat-file", "-e", `${inputCommit}:${path}`]);
     throw new Error("Validation failure is already recorded; remediate it before recording another failure");
@@ -248,10 +264,10 @@ export async function recordValidationFailure(cwd: string): Promise<ValidationFa
   if (result.issues.length === 0 && result.testExitCode === 0) return undefined;
   await git.assertClean();
   const record: ValidationFailureRecord = {
-    schemaVersion: 1,
+    schemaVersion: contract.schemaVersion,
     workId: state.id,
-    attempt: attemptNumber(state.attempt),
-    phase: "validate",
+    attempt,
+    phase: contract.validationPhase,
     inputCommit,
     inputTree,
     testCommand: [...config.testCommand],
@@ -265,9 +281,9 @@ export async function recordValidationFailure(cwd: string): Promise<ValidationFa
   await writeAtomic(join(cwd, path), stableJson(record));
   await git.commit([path], `sdd(validate): record failure for ${state.id}`, {
     work: state.id,
-    phase: "validate",
+    phase: contract.validationPhase,
     state: "validation-failed",
-    ...(attemptNumber(state.attempt) > 0 ? { attempt: String(attemptNumber(state.attempt)) } : {}),
+    ...(attempt > 0 ? { attempt: String(attempt) } : {}),
   });
   return record;
 }
