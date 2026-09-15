@@ -1,0 +1,21 @@
+{
+  "schemaVersion": 1,
+  "workId": "issue-11-named-checks",
+  "reviewer": "LunaHighIssue11.ReviewIssue11",
+  "digest": "da060af5bacd56ef7ad6b4a0b5e7faccc6b3b5620bdfdbd0e45a960c65d308e0",
+  "verdict": "pass",
+  "findings": [
+    {
+      "id": "named-failure-status",
+      "severity": "high",
+      "summary": "Require a failing named result in failure records",
+      "disposition": "fixed"
+    },
+    {
+      "id": "process-tree-escalation",
+      "severity": "high",
+      "summary": "Keep timeout escalation alive until the process group is gone",
+      "disposition": "fixed"
+    }
+  ]
+}

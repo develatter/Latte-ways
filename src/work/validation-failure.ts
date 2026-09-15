@@ -37,13 +37,15 @@ export function legacyValidationEvidence(result: CheckResult): LegacyValidationF
   }
   return { kind: "validate", failures };
 }
-
 export function validationFailureDigest(record: Omit<ValidationFailureRecord, "digest">): string {
   return sha256(stableJson(record));
 }
 
 export function validationFailureRecordFailure(record: ValidationFailureRecord): string | undefined {
   if (!validateValidationFailure(record)) return "validation failure record is invalid";
+  if (record.commands && (!record.checks.named || !record.checks.named.some((check) => check.status === "failed" || check.status === "timed-out" || check.status === "unavailable"))) {
+    return "named validation failure record has no failed, timed-out, or unavailable check";
+  }
   if (record.digest !== validationFailureDigest({ ...record, digest: undefined } as Omit<ValidationFailureRecord, "digest">)) {
     return "validation failure record digest does not match its exact check results";
   }

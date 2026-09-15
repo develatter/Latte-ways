@@ -70,9 +70,10 @@ function execute(command: string[], cwd: string, timeoutMs: number): Promise<Exe
       finish({ status: "unavailable", detail: `Unable to spawn command: ${error.message}` });
     });
     child.once("close", (code, signal) => {
-      if (timedOut) {
-        finish({ status: "timed-out", detail: `Command exceeded timeout of ${timeoutMs}ms` });
-      } else if (code === 0) {
+      // Keep listeners and the escalation timer alive until SIGKILL has had time
+      // to reach descendants of a detached process group.
+      if (timedOut) return;
+      if (code === 0) {
         finish({ status: "passed", exitCode: 0 });
       } else {
         finish({
