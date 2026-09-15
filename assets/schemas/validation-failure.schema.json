@@ -11,11 +11,8 @@
     "phase": { "const": "validate" },
     "inputCommit": { "type": "string", "pattern": "^[0-9a-f]{40}$" },
     "inputTree": { "type": "string", "pattern": "^[0-9a-f]{40}$" },
-    "testCommand": {
-      "type": "array",
-      "minItems": 1,
-      "items": { "type": "string", "minLength": 1 }
-    },
+    "testCommand": { "$ref": "#/$defs/command" },
+    "commands": { "$ref": "#/$defs/commands" },
     "checks": {
       "type": "object",
       "additionalProperties": false,
@@ -34,13 +31,56 @@
             }
           }
         },
-        "testExitCode": { "type": "integer", "minimum": 0 }
+        "testExitCode": { "type": "integer", "minimum": 0 },
+        "named": {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["name", "status"],
+            "properties": {
+              "name": { "enum": ["test", "lint", "typecheck", "build", "e2e"] },
+              "status": { "enum": ["passed", "failed", "timed-out", "skipped", "unavailable"] },
+              "command": { "$ref": "#/$defs/command" },
+              "exitCode": { "type": "integer", "minimum": 0 },
+              "detail": { "type": "string", "minLength": 1 }
+            }
+          }
+        }
       },
       "anyOf": [
         { "properties": { "integrity": { "type": "array", "minItems": 1 } }, "required": ["integrity"] },
-        { "properties": { "testExitCode": { "type": "integer", "minimum": 1 } }, "required": ["testExitCode"] }
+        { "properties": { "testExitCode": { "type": "integer", "minimum": 1 } }, "required": ["testExitCode"] },
+        { "properties": { "named": { "type": "array", "minItems": 1 } }, "required": ["named"] }
       ]
     },
     "digest": { "type": "string", "pattern": "^[0-9a-f]{64}$" }
+  },
+  "$defs": {
+    "command": {
+      "type": "array",
+      "minItems": 1,
+      "items": { "type": "string", "minLength": 1 }
+    },
+    "commands": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["required"],
+      "properties": {
+        "test": { "$ref": "#/$defs/command" },
+        "lint": { "$ref": "#/$defs/command" },
+        "typecheck": { "$ref": "#/$defs/command" },
+        "build": { "$ref": "#/$defs/command" },
+        "e2e": { "$ref": "#/$defs/command" },
+        "required": {
+          "type": "array",
+          "minItems": 1,
+          "uniqueItems": true,
+          "items": { "enum": ["test", "lint", "typecheck", "build", "e2e"] }
+        },
+        "timeoutMs": { "type": "integer", "minimum": 1, "maximum": 3600000 }
+      }
+    }
   }
 }

@@ -3,7 +3,8 @@ import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { HARNESS_VERSION } from "../index.js";
 import { CONFIG_PATH, HOOKS_DIR, KNOWLEDGE_DIR, MANIFEST_PATH, PLAN_DIR, SDD_DIR, STATE_PATH, WAYS_DIR } from "../domain/constants.js";
-import type { HarnessConfig, ManagedManifest, MemoryConfig } from "../domain/types.js";
+import type { HarnessConfig, ManagedManifest, MemoryConfig, NamedChecksConfig } from "../domain/types.js";
+import { validateConfig, validationDetails } from "../domain/validation.js";
 import { sha256, stableJson, writeAtomic } from "../fs/files.js";
 import { GitRepository } from "../git/git.js";
 import { installAllAdapters } from "../adapters/install.js";
@@ -13,6 +14,7 @@ import { requestDiscovery } from "../memory/workflow.js";
 export interface BootstrapOptions {
   cwd: string;
   testCommand: string[];
+  commands?: NamedChecksConfig;
   force?: boolean;
   adapters?: boolean;
   memory?: Partial<MemoryConfig>;
@@ -57,12 +59,17 @@ async function installFile(root: string, target: string, asset: string, force: b
 export async function installHooks(git: GitRepository): Promise<void> {
   await git.run(["config", "core.hooksPath", HOOKS_DIR]);
 }
-
 export async function bootstrap(options: BootstrapOptions): Promise<ManagedManifest> {
   const root = await realpath(resolve(options.cwd));
   const git = new GitRepository(root);
   if (await realpath(await git.root()) !== root) throw new Error("Bootstrap must run at the Git repository root");
-  if (options.testCommand.length === 0) throw new Error("A test command is required");
+  if (!Array.isArray(options.testCommand) || options.testCommand.length === 0 || options.testCommand.some((part) => typeof part !== "string" || part.trim() === "")) {
+    throw new Error("A non-empty test command is required");
+  }
+  if (options.commands !== undefined) {
+    const candidate: HarnessConfig = { schemaVersion: 1, harnessVersion: HARNESS_VERSION, testCommand: [...options.testCommand], commands: options.commands };
+    if (!validateConfig(candidate)) throw new Error(`Invalid commands configuration: ${validationDetails("config", candidate).errors.join("; ")}`);
+  }
   const force = options.force ?? false;
 
   await Promise.all([
@@ -113,6 +120,7 @@ export async function bootstrap(options: BootstrapOptions): Promise<ManagedManif
     schemaVersion: 1,
     harnessVersion: HARNESS_VERSION,
     testCommand: [...options.testCommand],
+    ...(options.commands ? { commands: structuredClone(options.commands) } : {}),
     memory,
   };
   const configContent = stableJson(config);

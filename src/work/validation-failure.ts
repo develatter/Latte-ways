@@ -8,12 +8,21 @@ import { sha256, stableJson, writeAtomic } from "../fs/files.js";
 import { GitRepository } from "../git/git.js";
 import { attemptNumber, validationFailureRecordPath } from "./attempt.js";
 
-function canonicalChecks(result: Awaited<ReturnType<typeof runChecks>>): ValidationFailureRecord["checks"] {
+function canonicalChecks(result: CheckResult): ValidationFailureRecord["checks"] {
   return {
     integrity: [...result.issues]
       .sort((left, right) => left.code.localeCompare(right.code) || left.path.localeCompare(right.path) || left.message.localeCompare(right.message))
       .map(({ code, path, message }) => ({ code, path, message })),
     ...(result.testExitCode === undefined ? {} : { testExitCode: result.testExitCode }),
+    ...(result.checks ? {
+      named: result.checks.map((check) => ({
+        name: check.name,
+        status: check.status,
+        ...(check.command ? { command: [...check.command] } : {}),
+        ...(check.exitCode === undefined ? {} : { exitCode: check.exitCode }),
+        ...(check.detail ? { detail: check.detail } : {}),
+      })),
+    } : {}),
   };
 }
 
@@ -81,7 +90,10 @@ export async function validationFailureReplayFailure(git: GitRepository, record:
       replayFailure = "validation failure replay did not resolve the recorded input commit and tree";
     } else {
       const config = await loadConfig(replayCwd);
-      if (JSON.stringify(config.testCommand) !== JSON.stringify(record.testCommand)) {
+      if (record.commands) {
+        const replayed = canonicalChecks(await runChecks(replayCwd, false, record.commands));
+        replayFailure = sameChecks(replayed, record.checks) ? undefined : "validation failure record check results cannot be reproduced from its recorded input";
+      } else if (JSON.stringify(config.testCommand) !== JSON.stringify(record.testCommand)) {
         replayFailure = "validation failure replay command does not match its recorded input";
       } else {
         const replayed = canonicalChecks(await runChecks(replayCwd));
@@ -92,8 +104,8 @@ export async function validationFailureReplayFailure(git: GitRepository, record:
     replayFailure = "validation failure record check results cannot be replayed from its recorded input";
   }
   return await replayCleanupFailure(git, replayCwd) ?? replayFailure;
-}
 
+}
 /**
  * Legacy remediation stored only normalized failure strings in its transition.
  * Recreate that old projection at the transition's exact parent and reject it
@@ -188,8 +200,9 @@ export async function committedValidationFailureFailure(
   if (!added || changed.length !== 1 || changed[0] !== path) return "validation failure record commit must add only its record";
   try {
     const config: unknown = JSON.parse(await git.run(["show", `${parent}:.ways/config.json`]));
-    if (!validateConfig(config) || JSON.stringify(config.testCommand) !== JSON.stringify(record.testCommand)) {
-      return "validation failure record test command does not match its input tree";
+    if (!validateConfig(config) || JSON.stringify(config.testCommand) !== JSON.stringify(record.testCommand)
+      || JSON.stringify(config.commands) !== JSON.stringify(record.commands)) {
+      return "validation failure record command contract does not match its input tree";
     }
   } catch {
     return "validation failure record input configuration is unreadable";
@@ -237,6 +250,7 @@ export async function recordValidationFailure(cwd: string): Promise<ValidationFa
     inputCommit,
     inputTree,
     testCommand: [...config.testCommand],
+    ...(config.commands ? { commands: structuredClone(config.commands) } : {}),
     checks: canonicalChecks(result),
     digest: "",
   };
